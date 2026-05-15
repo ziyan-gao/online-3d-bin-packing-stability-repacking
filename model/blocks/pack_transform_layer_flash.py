@@ -1,0 +1,346 @@
+from __future__ import annotations
+
+from typing import Optional, Callable
+
+import torch
+import torch.nn as nn
+from torch import Tensor
+from .multiheaded_attention import (
+    MultiHeadedAttention,
+    init_qkv_projection,
+    init_output_projection,
+)
+from .ffn import FeedForwardNetwork
+from .projection import Linear
+from .norm_order import TransformerNormOrder
+from dataclasses import dataclass
+
+@dataclass
+class SelfAttenOutput:
+    
+    ems: torch.Tensor
+    """ ems after self attention"""
+    item: torch.Tensor
+    """ item logits after cross attention"""
+
+@dataclass
+class CrossAttenOutput:
+    
+    ems: torch.Tensor
+    """ems after interact with item"""
+    item: torch.Tensor
+    """item after interact with ems"""
+
+class ResidualConnection(nn.Module):
+    """Residual connection module.
+
+    Args:
+        sublayer: Sublayer module.
+        dropout: Dropout probability.
+    """
+
+    def __init__(
+        self, module: nn.Module, module_factor: float = 1.0, input_factor: float = 1.0
+    ):
+        super().__init__()
+        self.module = module
+        self.module_factor = module_factor
+        self.input_factor = input_factor
+
+    def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        return (self.module(x, *args, **kwargs) * self.module_factor) + (
+            x * self.input_factor
+        )
+
+
+class PackingTransformerEncoderLayer(nn.Module):
+    """Transformer encoder layer.
+
+    Args:
+        model_dim: Model dimensionality.
+        num_heads: Number of attention heads.
+        ffn_expansion_factor: Feed-forward network expansion factor.
+        dropout_p: Dropout probability.
+        proj_init_fn: Projection initialization function.
+    """
+
+    _ems_self_attn_ffn: ResidualConnection
+    _ems_self_attn: ResidualConnection
+    _item_self_attn_ffn: ResidualConnection
+    _item_self_attn: ResidualConnection
+    _ems_cross_attn_ffn: ResidualConnection
+    _ems_cross_attn: ResidualConnection
+    _item_cross_attn_ffn: ResidualConnection
+    _item_cross_attn: ResidualConnection
+    ems_self_attn_layer_norm: nn.LayerNorm
+    ems_cross_attn_layer_norm: nn.LayerNorm
+    item_self_attn_layer_norm: nn.LayerNorm
+    item_cross_attn_layer_norm: nn.LayerNorm
+    ems_self_attn_ffn_layer_norm: nn.LayerNorm
+    item_self_attn_ffn_layer_norm: nn.LayerNorm
+    ems_cross_attn_ffn_layer_norm: nn.LayerNorm
+    item_cross_attn_ffn_layer_norm: nn.LayerNorm
+    norm_order: TransformerNormOrder
+
+    def __init__(
+        self,
+        model_dim: int = 128,
+        num_heads: int = 8,
+        ffn_expansion_factor: int = 4,
+        dropout_p: float = 0.1,
+        norm_order: TransformerNormOrder = TransformerNormOrder.PRE,
+        proj_init_fn: Optional[Callable[[Linear], None]] = None,
+    ):
+        super().__init__()
+
+        self._ems_self_attn_ffn = ResidualConnection(
+            FeedForwardNetwork(
+                model_dim=model_dim,
+                inner_dim=model_dim * ffn_expansion_factor,
+                bias=True,
+                inner_dropout_p=dropout_p,
+                proj_init_fn=proj_init_fn if proj_init_fn is not None else None,
+            )
+        )
+
+        self._ems_self_attn = ResidualConnection(
+            MultiHeadedAttention(
+                embed_dim=model_dim,
+                num_heads=num_heads,
+                dropout_prob=dropout_p,
+                qkv_init_fn=(
+                    init_qkv_projection if proj_init_fn is None else proj_init_fn
+                ),
+                output_proj_init_fn=(
+                    init_qkv_projection if proj_init_fn is None else proj_init_fn
+                ),
+            )
+        )
+
+        self._item_self_attn_ffn = ResidualConnection(
+            FeedForwardNetwork(
+                model_dim=model_dim,
+                inner_dim=model_dim * ffn_expansion_factor,
+                bias=True,
+                inner_dropout_p=dropout_p,
+                proj_init_fn=proj_init_fn if proj_init_fn is not None else None,
+            )
+        )
+
+        self._item_self_attn = ResidualConnection(
+            MultiHeadedAttention(
+                embed_dim=model_dim,
+                num_heads=num_heads,
+                dropout_prob=dropout_p,
+                qkv_init_fn=(
+                    init_qkv_projection if proj_init_fn is None else proj_init_fn
+                ),
+                output_proj_init_fn=(
+                    init_output_projection if proj_init_fn is None else proj_init_fn
+                ),
+            )
+        )
+
+        self._ems_cross_attn_ffn = ResidualConnection(
+            FeedForwardNetwork(
+                model_dim=model_dim,
+                inner_dim=model_dim * ffn_expansion_factor,
+                bias=True,
+                inner_dropout_p=dropout_p,
+                proj_init_fn=proj_init_fn if proj_init_fn is not None else None,
+            )
+        )
+
+        self._ems_cross_attn = ResidualConnection(
+            MultiHeadedAttention(
+                embed_dim=model_dim,
+                num_heads=num_heads,
+                dropout_prob=dropout_p,
+                qkv_init_fn=(
+                    init_qkv_projection if proj_init_fn is None else proj_init_fn
+                ),
+                output_proj_init_fn=(
+                    init_output_projection if proj_init_fn is None else proj_init_fn
+                ),
+            )
+        )
+
+        self._item_cross_attn_ffn = ResidualConnection(
+            FeedForwardNetwork(
+                model_dim=model_dim,
+                inner_dim=model_dim * ffn_expansion_factor,
+                bias=True,
+                inner_dropout_p=dropout_p,
+                proj_init_fn=proj_init_fn if proj_init_fn is not None else None,
+            )
+        )
+
+        self._item_cross_attn = ResidualConnection(
+            MultiHeadedAttention(
+                embed_dim=model_dim,
+                num_heads=num_heads,
+                dropout_prob=dropout_p,
+                qkv_init_fn=(
+                    init_qkv_projection if proj_init_fn is None else proj_init_fn
+                ),
+                output_proj_init_fn=(
+                    init_output_projection if proj_init_fn is None else proj_init_fn
+                ),
+            )
+        )
+
+        self.ems_self_attn_layer_norm = nn.LayerNorm(model_dim)
+        self.ems_cross_attn_layer_norm = nn.LayerNorm(model_dim)
+        self.item_self_attn_layer_norm = nn.LayerNorm(model_dim)
+        self.item_cross_attn_layer_norm = nn.LayerNorm(model_dim)
+
+        self.ems_self_attn_ffn_layer_norm = nn.LayerNorm(model_dim)
+        self.item_self_attn_ffn_layer_norm = nn.LayerNorm(model_dim)
+        self.ems_cross_attn_ffn_layer_norm = nn.LayerNorm(model_dim)
+        self.item_cross_attn_ffn_layer_norm = nn.LayerNorm(model_dim)
+
+        self.norm_order = norm_order
+
+    def _forward_ems_self_attn(
+        self, ems_query: Tensor, ems_padding_mask: Optional[Tensor] = None
+    ) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            ems_query = self.ems_self_attn_layer_norm(ems_query)
+
+        seqs = self._ems_self_attn(ems_query, ems_query, ems_query, ems_padding_mask)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.ems_self_attn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_item_self_attn(self, item_query: Tensor) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            item_query = self.item_self_attn_layer_norm(item_query)
+
+        seqs = self._item_self_attn(item_query, item_query, item_query)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.item_self_attn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_ems_cross_attn(
+        self,
+        ems_query: Tensor,
+        item_kv: Tensor,
+    ) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            ems_query = self.ems_cross_attn_layer_norm(ems_query)
+
+        seqs = self._ems_cross_attn(ems_query, item_kv, item_kv)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.ems_cross_attn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_item_cross_attn(
+        self,
+        item_query: Tensor,
+        ems_kv: Tensor,
+        ems_padding_mask: Optional[Tensor] = None,
+    ) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            item_query = self.item_cross_attn_layer_norm(item_query)
+
+        seqs = self._item_cross_attn(item_query, ems_kv, ems_kv, ems_padding_mask)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.item_cross_attn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_ems_self_ffn(self, ems: Tensor) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            ems = self.ems_self_attn_ffn_layer_norm(ems)
+
+        seqs = self._ems_self_attn_ffn(ems)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.ems_self_attn_ffn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_item_self_ffn(self, item: Tensor) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            item = self.item_self_attn_ffn_layer_norm(item)
+
+        seqs = self._item_self_attn_ffn(item)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.item_self_attn_ffn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_ems_cross_ffn(self, ems: Tensor) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            ems = self.ems_cross_attn_ffn_layer_norm(ems)
+
+        seqs = self._ems_cross_attn_ffn(ems)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.ems_cross_attn_ffn_layer_norm(seqs)
+
+        return seqs
+
+    def _forward_item_cross_ffn(self, item: Tensor) -> Tensor:
+        if self.norm_order != TransformerNormOrder.POST:
+            item = self.item_cross_attn_ffn_layer_norm(item)
+
+        seqs = self._item_cross_attn_ffn(item)
+
+        if self.norm_order == TransformerNormOrder.POST:
+            seqs = self.item_cross_attn_ffn_layer_norm(seqs)
+
+        return seqs
+
+    def compute_slf_attn(
+        self,
+        ems: Tensor,
+        item: Tensor,
+        ems_padding_mask: Optional[Tensor] = None,
+    ) -> SelfAttenOutput:
+        item = item.view(ems.shape[0],
+                         -1, 
+                         item.shape[-1])
+        # self-attention
+        slf_attn_ems = self._forward_ems_self_attn(ems, ems_padding_mask)
+        slf_attn_item = self._forward_item_self_attn(item)
+
+        slf_attn_ems = self._forward_ems_self_ffn(slf_attn_ems)
+        slf_attn_item = self._forward_item_self_ffn(slf_attn_item)
+
+        return SelfAttenOutput(
+            ems=slf_attn_ems,
+            item=slf_attn_item,
+        )
+        
+    def compute_crs_attn(
+        self,
+        ems: Tensor,
+        item: Tensor,
+        ems_padding_mask: Optional[Tensor] = None,
+    ) -> CrossAttenOutput:
+        item = item.view(ems.shape[0],
+                         -1, 
+                         item.shape[-1])
+        # mutually cross-attention
+        crs_attn_ems = self._forward_ems_cross_attn(ems, item)
+        crs_attn_item = self._forward_item_cross_attn(item, ems, ems_padding_mask)
+
+        crs_attn_ems = self._forward_ems_cross_ffn(crs_attn_ems)
+        crs_attn_item = self._forward_item_cross_ffn(crs_attn_item)
+
+        return CrossAttenOutput(
+            ems=crs_attn_ems,
+            item=crs_attn_item,
+        )
+    
+    
+

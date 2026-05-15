@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local envs
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Runtime outputs / datasets / checkpoints
+log/
+logs/
+outputs/
+train_outputs/
+_plotly_live/
+*.pth
+*.pt
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+
+# Build cache
+.pdm-build/
+dist/
+build/

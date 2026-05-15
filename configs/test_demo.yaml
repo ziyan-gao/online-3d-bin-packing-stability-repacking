@@ -1,0 +1,27 @@
+ds_name: random
+agent: greedy
+checkpoint: train_outputs/random/policy_step.pth
+device:
+seed: 0
+num_sequences: 1
+iterations: 100
+max_unpack: 6
+target_util: 0.8
+max_steps: 100
+container_size: [600, 600, 600]
+buffer_space: 0
+remove_inscribed_ems: true
+visualize: false
+visual_dir: _plotly_live/mcts
+visual_z_max: 610.0
+visual_port: 8766
+visual_delay_sec: 0.5
+visual_bind_host: 127.0.0.1
+visual_public_host: 127.0.0.1
+visual_poll_ms: 300
+hold_visual: false
+save_replay: true
+replay_path: _plotly_live/demo_compose
+replay_interval_ms: 700
+mcts_max_child: 3
+optimize_sequence: false

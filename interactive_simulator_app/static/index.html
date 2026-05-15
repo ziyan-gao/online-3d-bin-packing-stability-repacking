@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Packing Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Interactive Packing Simulator</h1>
+    <div class="metric" id="utilization">Utilization: 0.0%</div>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="toolbar">
+        <button id="rot0" class="active" type="button">0 deg</button>
+        <button id="rot1" type="button">90 deg</button>
+        <button id="anchorMode" class="active" type="button">Anchors</button>
+        <button id="gridMode" type="button">Grid</button>
+        <button id="supportToggle" class="active" type="button">Support</button>
+        <button id="reset" type="button">Reset</button>
+        <span class="message" id="message"></span>
+      </div>
+      <div id="plot"></div>
+    </section>
+    <aside>
+      <div class="panel">
+        <h2>Bin</h2>
+        <div class="bin-stats">
+          <div>
+            <span class="stat-label">Utilization</span>
+            <span class="stat-value" id="binUtilization">0.0%</span>
+          </div>
+          <div>
+            <span class="stat-label">Placed</span>
+            <span class="stat-value" id="placedCount">0</span>
+          </div>
+        </div>
+        <div class="size-controls">
+          <label>
+            X
+            <input id="containerDx" type="number" min="120" step="10" />
+          </label>
+          <label>
+            Y
+            <input id="containerDy" type="number" min="120" step="10" />
+          </label>
+          <label>
+            Z
+            <input id="containerDz" type="number" min="120" step="10" />
+          </label>
+          <button id="applySize" type="button">Apply</button>
+        </div>
+        <label class="option-row">
+          <input id="sameItemHeight" type="checkbox" />
+          Same item height
+          <span id="fixedItemHeight">120 mm</span>
+        </label>
+      </div>
+      <div class="panel">
+        <h2>Current Item</h2>
+        <div class="current" id="currentItem">-</div>
+      </div>
+      <div class="panel">
+        <h2>Buffer Queue</h2>
+        <div id="bufferPlot"></div>
+        <div class="buffer-list" id="bufferList"></div>
+      </div>
+      <div class="panel">
+        <h2>How It Works</h2>
+        <div>
+          Anchors mode uses green markers lifted above the candidate item.
+          Grid mode shows 30 mm candidate positions. Teal previews are
+          stable/placeable; transparent red previews are rejected. Clicking a
+          candidate places the current item and advances the buffer.
+        </div>
+      </div>
+    </aside>
+  </main>
+  <script type="module" src="/static/simulator.js"></script>
+</body>
+</html>

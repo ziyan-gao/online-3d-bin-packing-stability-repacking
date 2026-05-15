@@ -1,0 +1,27 @@
+# Python/cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pdm-build/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local agent state
+.codex
+.codex/
+
+# Generated experiment artifacts
+logs/
+log/
+outputs/
+train_outputs/
+_plotly_live/
+buffer_support_live.html
+ems_debug_frame.html
+*.csv
+*.gif
+!figures/*.gif
+*.pth
