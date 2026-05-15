@@ -178,6 +178,10 @@ are written under `_plotly_live/` when `--save-replay` is enabled.
 
 ## Training
 
+This public release includes a pretrained demo checkpoint under
+`train_outputs/random/`. The default policy examples use
+`train_outputs/random/policy_step.pth` when available.
+
 Run the short smoke training configuration:
 
 ```bash

@@ -18,6 +18,12 @@ logs/
 log/
 outputs/
 train_outputs/
+!train_outputs/
+train_outputs/*
+!train_outputs/random/
+!train_outputs/random/checkpoint.pth
+!train_outputs/random/policy_step.pth
+!train_outputs/random/data_distribution.json
 _plotly_live/
 buffer_support_live.html
 ems_debug_frame.html
@@ -25,3 +31,4 @@ ems_debug_frame.html
 *.gif
 !figures/*.gif
 *.pth
+!train_outputs/random/*.pth
