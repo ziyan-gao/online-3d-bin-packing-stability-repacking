@@ -58,10 +58,10 @@ visual artifacts.
   unstable actions have been filtered out.
 - The policy therefore optimizes utilization while inheriting the same
   stability constraints used by the simulator and environment.
-- A local interactive replay artifact is included at
+- Open the hosted replay:
+  [stability-ensured packing policy](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/packing_steps.html).
+- The same replay is also included locally at
   `_plotly_live/notebook_demo/packing_steps.html`.
-- GitHub may not execute the replay HTML inline; open it from a local clone or
-  serve the repository as static files to interact with the replay controls.
 
 ### MCTS And Safe Repacking
 
@@ -71,14 +71,18 @@ visual artifacts.
   current container state.
 - Each searched operation is replayed through the same environment constraints,
   so repacking proposals must remain geometrically feasible and stable.
-- The raw MCTS replay artifact is included at
+- Open the hosted replay:
+  [raw MCTS repacking](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/mcts_replay.html).
+- The same replay is also included locally at
   `_plotly_live/notebook_demo/mcts_replay.html`.
 
 ### Optimized Repacking Sequence
 
 - The raw MCTS result is converted into a shorter executable operation sequence
   for the final unpack, repack, and pack procedure.
-- The optimized replay artifact is included at
+- Open the hosted replay:
+  [optimized repacking sequence](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/mcts_optimized_replay.html).
+- The same replay is also included locally at
   `_plotly_live/notebook_demo/mcts_optimized_replay.html`.
 - Real-platform demonstrations show the stability validation and policy-driven
   repacking behavior on hardware:
