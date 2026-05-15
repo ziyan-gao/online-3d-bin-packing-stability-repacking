@@ -1,0 +1,4 @@
+# Generated Plotly replay artifacts are tracked for demos/GitHub Pages, but
+# should not dominate GitHub's repository language statistics.
+_plotly_live/**/*.html linguist-generated=true
+docs/replays/**/*.html linguist-generated=true
