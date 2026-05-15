@@ -55,6 +55,29 @@ pallet using the trained policy and repacking planner.
 The GIFs are stored in `figures/` so the demonstrations render directly in the
 README.
 
+## Installation
+
+Create the recommended conda environment:
+
+```bash
+conda env create -f environment.yml
+conda activate packing-toolkit
+poetry config virtualenvs.create false --local
+poetry install --no-dev --no-root
+python -m ipykernel install --user --name packing-toolkit --display-name "Python (packing-toolkit)"
+```
+
+The environment pins `sqlite` and `libsqlite` from `conda-forge` to the same
+version. This avoids Jupyter kernel startup failures such as:
+
+```text
+undefined symbol: sqlite3_deserialize
+```
+
+Tianshou is installed by Poetry rather than directly by conda. The project pins
+the source revision in `pyproject.toml` because that dependency is more fragile
+than the regular Python packages.
+
 ## Try It Quickly
 
 Open the proposed-framework notebook walkthrough:
@@ -93,29 +116,6 @@ Run a short training smoke demo:
 ```bash
 python train.py --config configs/train_demo.yaml
 ```
-
-## Installation
-
-Create the recommended conda environment:
-
-```bash
-conda env create -f environment.yml
-conda activate packing-toolkit
-poetry config virtualenvs.create false --local
-poetry install --no-dev --no-root
-python -m ipykernel install --user --name packing-toolkit --display-name "Python (packing-toolkit)"
-```
-
-The environment pins `sqlite` and `libsqlite` from `conda-forge` to the same
-version. This avoids Jupyter kernel startup failures such as:
-
-```text
-undefined symbol: sqlite3_deserialize
-```
-
-Tianshou is installed by Poetry rather than directly by conda. The project pins
-the source revision in `pyproject.toml` because that dependency is more fragile
-than the regular Python packages.
 
 ## Main Components
 
