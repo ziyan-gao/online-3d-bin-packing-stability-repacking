@@ -339,6 +339,11 @@ docker compose -f docker-compose.demo.yml up notebook
 
 More Docker and monitoring notes are in `DOCKER.md`.
 
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+details.
+
 ## Development Notes
 
 This project uses Python 3.11. The `pyproject.toml` and `pdm.lock` files describe
