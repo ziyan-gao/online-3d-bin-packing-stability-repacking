@@ -18,6 +18,73 @@ accepted.
   buffer items, and replayed execution sequences.
 - Reproducible train/test/demo entry points with notebooks and Docker support.
 
+## Project Roadmap
+
+This repository can be read as a staged research pipeline for practical online
+3D bin packing: validate stable placements, choose packing actions, recover
+from blocked states with repacking, and inspect each stage through replayable
+visual artifacts.
+
+### System Overview
+
+![Proposed method](figures/Proposed_method.png)
+
+- The system starts from online item arrivals and a fixed pallet/container.
+- Candidate placements are generated from EMS-based free-space geometry.
+- Each candidate is checked against geometric feasibility and structural
+  stability before it can be accepted.
+- A learned packing policy selects among stability-validated candidates.
+- When direct packing fails, MCTS searches safe unpack, repack, and pack
+  sequences.
+- Plotly/Three.js visualizations and real-platform demos expose the behavior of
+  each module.
+
+### Interactive Stability Simulator
+
+![Interactive stability simulator](figures/interactive_simulator.gif)
+
+- The simulator provides a hands-on interface for testing placement candidates
+  before running a full policy or MCTS sequence.
+- Its backend uses the same height-map and feasibility-map stability validation
+  logic used by the packing system.
+- Grid and anchor previews make stable placements visually inspectable, while
+  rejected placements expose where feasibility or support constraints fail.
+- The static simulator preview is also available at
+  `figures/interactive_simulator.png`.
+
+### Stability-Ensured Packing Policy
+
+- The actor-critic policy ranks EMS-based placement candidates after invalid or
+  unstable actions have been filtered out.
+- The policy therefore optimizes utilization while inheriting the same
+  stability constraints used by the simulator and environment.
+- A local interactive replay artifact is included at
+  `_plotly_live/notebook_demo/packing_steps.html`.
+- GitHub may not execute the replay HTML inline; open it from a local clone or
+  serve the repository as static files to interact with the replay controls.
+
+### MCTS And Safe Repacking
+
+- MCTS is triggered when the incoming item cannot be packed directly by the
+  policy or greedy placement process.
+- The planner searches over unpack, repack, and final pack operations on the
+  current container state.
+- Each searched operation is replayed through the same environment constraints,
+  so repacking proposals must remain geometrically feasible and stable.
+- The raw MCTS replay artifact is included at
+  `_plotly_live/notebook_demo/mcts_replay.html`.
+
+### Optimized Repacking Sequence
+
+- The raw MCTS result is converted into a shorter executable operation sequence
+  for the final unpack, repack, and pack procedure.
+- The optimized replay artifact is included at
+  `_plotly_live/notebook_demo/mcts_optimized_replay.html`.
+- Real-platform demonstrations show the stability validation and policy-driven
+  repacking behavior on hardware:
+  `figures/random_stable_loading_acc.gif` and
+  `figures/policy_rearrangement_demo.gif`.
+
 ## Proposed Method
 
 ![Proposed method](figures/Proposed_method.png)
