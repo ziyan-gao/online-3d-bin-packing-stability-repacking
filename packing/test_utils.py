@@ -76,7 +76,11 @@ def load_test_config(config_path: str = DEFAULT_TEST_CONFIG) -> TestConfig:
 def build_agent(config: TestConfig):
     if config.checkpoint is None:
         raise ValueError("checkpoint is required for policy validation")
-    agent = PackingAgent(device=config.device, checkpoint_path=config.checkpoint)
+    agent = PackingAgent(
+        device=config.device,
+        checkpoint_path=config.checkpoint,
+        policy_mode=getattr(config, "policy_mode", "largest_block_baseline"),
+    )
     print(f"loaded policy weights from {config.checkpoint} on {agent.device}")
     return agent
 
@@ -89,6 +93,7 @@ def build_env(config: TestConfig, seed: int) -> PackingEnv:
         remove_inscribed_ems=config.remove_inscribed_ems,
         stack_only=config.stack_only,
         use_simple_blocks=config.use_simple_blocks,
+        policy_mode=getattr(config, "policy_mode", "largest_block_baseline"),
     )
     env.reset(seed=seed)
     return env

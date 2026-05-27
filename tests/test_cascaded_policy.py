@@ -13,7 +13,8 @@ from model.cascaded_critic import CascadedCritic
 from model.cascaded_policy import CascadedCategoricalMasked
 from packing.policy_loader import build_net
 from packing.train_utils import TrainConfig, load_training_checkpoint
-from packing.test_utils import DEFAULT_TEST_CONFIG, load_test_config
+import packing.test_utils as test_utils
+from packing.test_utils import DEFAULT_TEST_CONFIG, build_agent, build_env, load_test_config
 from packing_env.data_type.buffer import Buffer
 from packing_env.data_type.geometry import Orthogonal3D
 from packing_env.gym_env import PackingEnv
@@ -187,6 +188,50 @@ def test_build_net_returns_cascaded_models_for_cascaded_policy_mode():
 
     assert isinstance(actor, CascadedActor)
     assert isinstance(critic, CascadedCritic)
+
+
+def test_test_utils_build_env_propagates_cascaded_policy_mode():
+    config = SimpleNamespace(
+        ds_name="random",
+        container_size=(600, 600, 600),
+        buffer_space=0,
+        remove_inscribed_ems=False,
+        stack_only=False,
+        use_simple_blocks=False,
+        policy_mode="cascaded_block_selector",
+    )
+
+    env = build_env(config, seed=1)
+
+    assert env.policy_mode == "cascaded_block_selector"
+
+
+def test_test_utils_build_agent_propagates_cascaded_policy_mode(monkeypatch):
+    created = {}
+
+    class RecordingAgent:
+        device = "cpu"
+
+        def __init__(self, *, device, checkpoint_path, policy_mode):
+            created["device"] = device
+            created["checkpoint_path"] = checkpoint_path
+            created["policy_mode"] = policy_mode
+
+    monkeypatch.setattr(test_utils, "PackingAgent", RecordingAgent)
+    config = SimpleNamespace(
+        device="cpu",
+        checkpoint="checkpoint.pth",
+        policy_mode="cascaded_block_selector",
+    )
+
+    agent = build_agent(config)
+
+    assert isinstance(agent, RecordingAgent)
+    assert created == {
+        "device": "cpu",
+        "checkpoint_path": "checkpoint.pth",
+        "policy_mode": "cascaded_block_selector",
+    }
 
 
 def test_cascaded_env_step_can_use_flat_policy_action():
