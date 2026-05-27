@@ -16,7 +16,7 @@ from .geometry import (
     Rectangle,
     offset,
 )
-from .item import Item
+from .item import Item, SimpleBlock
 from .maps import HeightMap, Map
 from .support_vis import SupportVisData
 
@@ -32,6 +32,7 @@ __all__ = [
     "GRID_SIZE",
     "HeightMap",
     "Item",
+    "SimpleBlock",
     "Map",
     "Orthogonal2D",
     "Orthogonal3D",

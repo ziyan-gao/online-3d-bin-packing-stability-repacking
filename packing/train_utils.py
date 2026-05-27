@@ -31,6 +31,8 @@ class TrainConfig:
     container_dz: int = 600
     k_placement: int = 80
     remove_inscribed_ems: bool = False
+    stack_only: bool = False
+    use_simple_blocks: bool = False
     train_env_num: int = 64
     test_env_num: int = 32
     train_env_seed: int = 5
@@ -96,6 +98,8 @@ def save_data_distribution(output_dir: str, config: TrainConfig) -> str:
         "container_size": [config.container_dx, config.container_dy, config.container_dz],
         "k_placement": config.k_placement,
         "remove_inscribed_ems": config.remove_inscribed_ems,
+        "stack_only": config.stack_only,
+        "use_simple_blocks": config.use_simple_blocks,
         "boxes": boxes,
         "probabilities": probabilities,
     }
@@ -118,6 +122,8 @@ def make_envs(config: TrainConfig):
                 buffer_capacity=config.buffer_size,
                 container_size=container_size,
                 remove_inscribed_ems=config.remove_inscribed_ems,
+                stack_only=config.stack_only,
+                use_simple_blocks=config.use_simple_blocks,
             )
             for _ in range(config.train_env_num)
         ]
@@ -131,6 +137,8 @@ def make_envs(config: TrainConfig):
                 buffer_capacity=config.buffer_size,
                 container_size=container_size,
                 remove_inscribed_ems=config.remove_inscribed_ems,
+                stack_only=config.stack_only,
+                use_simple_blocks=config.use_simple_blocks,
             )
             for _ in range(config.test_env_num)
         ]
@@ -149,6 +157,8 @@ def make_single_env(config: TrainConfig):
         buffer_capacity=config.buffer_size,
         container_size=container_size(config),
         remove_inscribed_ems=config.remove_inscribed_ems,
+        stack_only=config.stack_only,
+        use_simple_blocks=config.use_simple_blocks,
     )
 
 
@@ -248,11 +258,14 @@ def load_training_checkpoint(
         "buffer_size": config.buffer_size,
         "k_placement": config.k_placement,
         "remove_inscribed_ems": config.remove_inscribed_ems,
+        "stack_only": config.stack_only,
+        "use_simple_blocks": config.use_simple_blocks,
     }
+    checkpoint_defaults = {"stack_only": False, "use_simple_blocks": False}
     mismatches = {
-        key: (checkpoint.get(key), value)
+        key: (checkpoint.get(key, checkpoint_defaults.get(key)), value)
         for key, value in expected.items()
-        if checkpoint.get(key) != value
+        if checkpoint.get(key, checkpoint_defaults.get(key)) != value
     }
     if mismatches:
         details = ", ".join(

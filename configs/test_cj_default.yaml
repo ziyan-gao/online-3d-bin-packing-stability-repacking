@@ -1,29 +1,29 @@
-ds_name: random
+ds_name: CJ
 agent: policy
-checkpoint: train_outputs/random/policy_step.pth
+checkpoint: /home/gao/CJ_block_dockerize/outputs/model_cj/CJ/policy_step.pth
 device:
 seed: 101
 num_sequences: 1
 iterations: 100
 max_unpack: 6
-use_mcts: true
-target_util: 0.8
+use_mcts: false
+target_util: 1
 max_steps: 300
-container_size: [600, 600, 600]
-buffer_space: 10
+container_size: [1200, 1000, 1350]
+buffer_space: 0
 remove_inscribed_ems: false
-stack_only: false
-use_simple_blocks: false
+stack_only: true
+use_simple_blocks: true
 visualize: false
-visual_dir: _three_live/mcts
-visual_z_max: 610.0
+visual_dir: _three_live/cj_policy
+visual_z_max: 1400.0
 visual_port: 8766
 visual_delay_sec: 0.5
 visual_bind_host: 127.0.0.1
 visual_public_host: 127.0.0.1
 visual_poll_ms: 300
-show_ems: false
-ems_visual_mode: raw
+show_ems: true
+ems_visual_mode: policy
 hold_visual: false
 save_replay: false
 replay_path:

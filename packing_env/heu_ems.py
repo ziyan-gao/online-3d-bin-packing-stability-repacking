@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 import os
 from typing import Iterable, List, Sequence
@@ -285,6 +286,35 @@ class EMS:
         return out
 
     @staticmethod
+    def _remove_same_flb_dominated(spaces: Iterable[EmptyMaximalSpace]) -> List[EmptyMaximalSpace]:
+        groups: dict[tuple[int, int, int], list[EmptyMaximalSpace]] = defaultdict(list)
+        for space in spaces:
+            groups[(space.FLB.x, space.FLB.y, space.FLB.z)].append(space)
+
+        out: List[EmptyMaximalSpace] = []
+        for group in groups.values():
+            for i, space in enumerate(group):
+                dominated = False
+                for j, other in enumerate(group):
+                    if i == j:
+                        continue
+                    if (
+                        other.Dim.dx >= space.Dim.dx
+                        and other.Dim.dy >= space.Dim.dy
+                        and other.Dim.dz >= space.Dim.dz
+                        and (
+                            other.Dim.dx > space.Dim.dx
+                            or other.Dim.dy > space.Dim.dy
+                            or other.Dim.dz > space.Dim.dz
+                        )
+                    ):
+                        dominated = True
+                        break
+                if not dominated:
+                    out.append(space)
+        return out
+
+    @staticmethod
     def _supported_by_heightmap(space: EmptyMaximalSpace, hm: HeightMap) -> bool:
         x0, y0 = space.FLB.Hx, space.FLB.Hy
         x1, y1 = x0 + space.Dim.Hdx, y0 + space.Dim.Hdy
@@ -432,7 +462,7 @@ class EMS:
         after_dedup = len(deduped)
         if self.remove_inscribed:
             deduped = self._remove_inscribed(deduped)
-        self.__ems_list = self._remove_floating(deduped, hm)
+        self.__ems_list = deduped
         self._rebuild_index()
         if record_history:
             self._packed_items.append(box)
@@ -459,19 +489,9 @@ class EMS:
 
         remaining_items = self._packed_items[:remove_idx] + self._packed_items[remove_idx + 1:]
         self.reset()
-        replay_hm = HeightMap(
-            dx=self._container_dim.dx,
-            dy=self._container_dim.dy,
-            zmax=self._container_dim.dz,
-        )
         for item in remaining_items:
-            replay_hm.update(item)
-            self.update(item, hm=replay_hm, record_history=False)
+            self.update(item, record_history=False)
         self._packed_items = list(remaining_items)
-
-        if hm is not None:
-            self.__ems_list = self._remove_floating(self.__ems_list, hm)
-            self._rebuild_index()
 
     @property
     def packed_items(self) -> list[Item]:
@@ -493,6 +513,13 @@ class EMS:
         if self.k_placement <= 0:
             return []
         return sorted_ems[: self.k_placement]
+
+    def get_all_ems(self) -> List[EmptyMaximalSpace]:
+        """Return all EMSs in legacy policy order, without applying k_placement."""
+        return sorted(
+            self.__ems_list,
+            key=lambda ems: (ems.FLB.z, ems.FLB.y, ems.FLB.x),
+        )
 
     def get_ems_list(self) -> List[EmptyMaximalSpace]:
         return self.get_ems()

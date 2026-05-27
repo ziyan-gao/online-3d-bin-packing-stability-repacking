@@ -44,6 +44,16 @@ def parse_train_args() -> TrainConfig:
         action=argparse.BooleanOptionalAction,
         help="Remove EMS candidates that are fully contained in another EMS.",
     )
+    parser.add_argument(
+        "--stack-only",
+        action=argparse.BooleanOptionalAction,
+        help="Generate SimpleBlock candidates as vertical stacks of identical boxes.",
+    )
+    parser.add_argument(
+        "--use-simple-blocks",
+        action=argparse.BooleanOptionalAction,
+        help="Use generated SimpleBlock candidates instead of FIFO single-box sampling.",
+    )
     args = parser.parse_args()
 
     config = load_train_config(args.config)
@@ -53,6 +63,8 @@ def parse_train_args() -> TrainConfig:
         "output_name": args.output_name,
         "resume_checkpoint": args.resume_checkpoint,
         "remove_inscribed_ems": args.remove_inscribed_ems,
+        "stack_only": args.stack_only,
+        "use_simple_blocks": args.use_simple_blocks,
     }
     overrides = {key: value for key, value in overrides.items() if value is not None}
     return replace(config, **overrides)

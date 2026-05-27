@@ -24,6 +24,11 @@ def parse_test_args() -> TestConfig:
     parser.add_argument("--num-sequences", type=int)
     parser.add_argument("--iterations", type=int)
     parser.add_argument("--max-unpack", type=int)
+    parser.add_argument(
+        "--use-mcts",
+        action=argparse.BooleanOptionalAction,
+        help="Run MCTS unpack/repack search after the initial packing loop blocks.",
+    )
     parser.add_argument("--target-util", type=float)
     parser.add_argument("--max-steps", type=int)
     parser.add_argument("--container-size", type=int, nargs=3)
@@ -39,7 +44,27 @@ def parse_test_args() -> TestConfig:
         action=argparse.BooleanOptionalAction,
         help="Remove EMS candidates that are fully contained in another EMS.",
     )
+    parser.add_argument(
+        "--stack-only",
+        action=argparse.BooleanOptionalAction,
+        help="Generate SimpleBlock candidates as vertical stacks of identical boxes.",
+    )
+    parser.add_argument(
+        "--use-simple-blocks",
+        action=argparse.BooleanOptionalAction,
+        help="Use generated SimpleBlock candidates instead of FIFO single-box sampling.",
+    )
     parser.add_argument("--visualize", action=argparse.BooleanOptionalAction)
+    parser.add_argument(
+        "--show-ems",
+        action=argparse.BooleanOptionalAction,
+        help="Draw EMS cuboids in the left Three.js scene.",
+    )
+    parser.add_argument(
+        "--ems-visual-mode",
+        choices=("raw", "policy"),
+        help="Choose whether EMS visualization shows raw capped EMSs or policy-exposed EMSs.",
+    )
     parser.add_argument("--save-replay", action=argparse.BooleanOptionalAction)
     parser.add_argument("--replay-path", help="Interactive replay HTML path or output directory.")
     parser.add_argument("--optimize-sequence", action=argparse.BooleanOptionalAction)
@@ -54,12 +79,17 @@ def parse_test_args() -> TestConfig:
         "num_sequences": args.num_sequences,
         "iterations": args.iterations,
         "max_unpack": args.max_unpack,
+        "use_mcts": args.use_mcts,
         "target_util": args.target_util,
         "max_steps": args.max_steps,
         "container_size": tuple(args.container_size) if args.container_size is not None else None,
         "buffer_space": args.buffer_space,
         "remove_inscribed_ems": args.remove_inscribed_ems,
+        "stack_only": args.stack_only,
+        "use_simple_blocks": args.use_simple_blocks,
         "visualize": args.visualize,
+        "show_ems": args.show_ems,
+        "ems_visual_mode": args.ems_visual_mode,
         "save_replay": args.save_replay,
         "replay_path": args.replay_path,
         "optimize_sequence": args.optimize_sequence,

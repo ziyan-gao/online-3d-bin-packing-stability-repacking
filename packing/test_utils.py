@@ -32,19 +32,24 @@ class TestConfig:
     num_sequences: int = 1
     iterations: int = 100
     max_unpack: int = 6
+    use_mcts: bool = True
     target_util: float = 0.8
     max_steps: int = 300
     container_size: tuple[int, int, int] = (600, 600, 600)
     buffer_space: int = 10
     remove_inscribed_ems: bool = False
+    stack_only: bool = False
+    use_simple_blocks: bool = False
     visualize: bool = False
-    visual_dir: str = "_plotly_live/mcts"
+    visual_dir: str = "_three_live/mcts"
     visual_z_max: float = 610.0
     visual_port: int = 8766
     visual_delay_sec: float = 0.5
     visual_bind_host: str = "127.0.0.1"
     visual_public_host: str = "127.0.0.1"
     visual_poll_ms: int = 300
+    show_ems: bool = False
+    ems_visual_mode: str = "raw"
     hold_visual: bool = False
     save_replay: bool = False
     replay_path: str | None = None
@@ -85,6 +90,8 @@ def build_env(config: TestConfig, seed: int) -> PackingEnv:
         container_size=tuple(config.container_size),
         item_buffer_space=config.buffer_space,
         remove_inscribed_ems=config.remove_inscribed_ems,
+        stack_only=config.stack_only,
+        use_simple_blocks=config.use_simple_blocks,
     )
     env.reset(seed=seed)
     return env
@@ -124,8 +131,27 @@ def record_pack_step(box, env: PackingEnv) -> tuple:
 def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, visualizer: Visualizer):
     pack_history = []
     for step in range(config.max_steps):
-        item = env.buffer.sample_item()
-        obs = env.get_pack_data(item)
+        if config.use_simple_blocks:
+            env.select_largest_policy_block()
+            if env.buffer.all_blocks:
+                candidate_items = [env.buffer.sample_blocks(deterministic=True)]
+                obs = env.get_pack_data(candidate_items[0])
+            else:
+                print(
+                    "blocked at step={}, utilization={:.4f}, placed={}, unpackable={}".format(
+                        step,
+                        env.container.utilization,
+                        len(env.container.placed_items),
+                        len(env.container.unpackable_boxes),
+                    )
+                )
+                blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
+                visualizer.push(env, blocked_title)
+                return None, pack_history, False
+        else:
+            candidate_items = [env.buffer.sample_item()]
+            obs = env.get_pack_data(candidate_items[0])
+
         if not obs["placable"]:
             print(
                 "blocked at step={}, utilization={:.4f}, placed={}, unpackable={}".format(
@@ -137,9 +163,15 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
             )
             blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
             visualizer.push(env, blocked_title)
-            return item, pack_history, False
+            return candidate_items[0] if candidate_items else None, pack_history, False
 
-        box, (_, action_idx, _) = agent.predict(obs)
+        box, (item_idx, action_idx, _) = agent.predict(obs)
+        item = candidate_items[item_idx]
+        pack_title = f"Pack Step {step + 1} - seed {seed}"
+        if hasattr(visualizer, "push_buffer_selection"):
+            visualizer.push_buffer_selection(env, pack_title, item)
+        else:
+            visualizer.push(env, pack_title)
         env.pack(box, selected_ems=env.ems_list[action_idx % env.k_placement])
         env.buffer.update(item)
         pack_history.append(record_pack_step(box, env))
@@ -152,8 +184,6 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
                 len(env.container.placed_items),
             )
         )
-        pack_title = f"Pack Step {step + 1} - seed {seed}"
-        visualizer.push(env, pack_title)
 
         if env.container.utilization >= config.target_util:
             print("target utilization reached before MCTS was needed")
@@ -230,6 +260,16 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
         )
         visualizer.hold()
         return make_summary(seed, "target_before_mcts", env)
+
+    if not config.use_mcts:
+        visualizer.save_sequence_replay(
+            seed,
+            initial_buffer,
+            pack_history,
+            mcts_used=False,
+        )
+        visualizer.hold()
+        return make_summary(seed, "blocked_no_mcts", env)
 
     result = run_mcts_search(config, env, agent, blocked_item)
     if result is None:

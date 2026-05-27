@@ -18,7 +18,7 @@ class EmptyMaximalSpace(Item):
 
     @property
     def Volume(self):
-        return self.dx * self.dy * self.dz
+        return self.Dim.dx * self.Dim.dy * self.Dim.dz
 
     def __lt__(self, other: EmptyMaximalSpace):
         return self.Volume < other.Volume

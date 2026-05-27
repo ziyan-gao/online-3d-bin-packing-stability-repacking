@@ -8,11 +8,10 @@ from .data_type.container import Container
 from .data_type.data_sampler import DataSampler
 from .data_type.ems import EmptyMaximalSpace
 from .data_type.geometry import Orthogonal3D, Point3D
-from .data_type.item import Item
+from .data_type.item import Item, SimpleBlock
 from .data_type.maps import HeightMap
 from .heu_stable import Heu_Stable
 from .heu_ems import EMS
-from .visualization import PackVisualizer
 
 class PackingEnv(gym.Env):
     def __init__(
@@ -23,6 +22,8 @@ class PackingEnv(gym.Env):
         container_size: tuple[int, int, int] = (600, 600, 600),
         item_buffer_space: int = 0,
         remove_inscribed_ems: bool = False,
+        stack_only: bool = False,
+        use_simple_blocks: bool = False,
     ) -> None:
         """Initialize the packing environment.
         
@@ -45,6 +46,8 @@ class PackingEnv(gym.Env):
         self.k_placement = k_placement
         self.item_buffer_space = int(item_buffer_space)
         self.remove_inscribed_ems = bool(remove_inscribed_ems)
+        self.stack_only = bool(stack_only)
+        self.use_simple_blocks = bool(use_simple_blocks or stack_only)
         if self.item_buffer_space < 0:
             raise ValueError("item_buffer_space must be non-negative.")
         if self.item_buffer_space % self.hm.resolution != 0:
@@ -57,8 +60,14 @@ class PackingEnv(gym.Env):
         
         # Initialize buffer with data sampler
         data_sampler = DataSampler(data_name=ds_name)
-        self.buffer = Buffer(capacity=buffer_capacity, data_sampler=data_sampler)
-        self._render_visualizer: PackVisualizer | None = None
+        self.buffer = Buffer(
+            capacity=buffer_capacity,
+            data_sampler=data_sampler,
+            stack_only=self.stack_only,
+            container_size=container_size,
+            buffer_space=self.item_buffer_space,
+        )
+        self._render_visualizer = None
         self._set_space()
 
 
@@ -106,7 +115,7 @@ class PackingEnv(gym.Env):
 
     def get_stable_lps_mask(
         self,
-        item: Orthogonal3D,
+        item: Orthogonal3D | SimpleBlock,
         placements: np.ndarray,
         ems_list: List[EmptyMaximalSpace],
         buffer_space: Optional[int] = None,
@@ -124,6 +133,7 @@ class PackingEnv(gym.Env):
             Boolean mask of length k_placement indicating stable placements
         """
         buffer_space = self.item_buffer_space if buffer_space is None else int(buffer_space)
+        item = item.Dim if isinstance(item, SimpleBlock) else item
         mask = np.zeros((self.k_placement,), dtype=bool)
         # Check which EMS can contain the item
         virtual_item = Orthogonal3D(
@@ -167,10 +177,210 @@ class PackingEnv(gym.Env):
                 ]
         return np.round(candidates, 4)
 
+    def _ems_can_fit_item(self, ems: EmptyMaximalSpace, item: Orthogonal3D | SimpleBlock) -> bool:
+        dim = item.Dim if isinstance(item, SimpleBlock) else item
+        buffer_space = item.buffer_space if isinstance(item, SimpleBlock) else self.item_buffer_space
+        virtual_dim = Orthogonal3D(
+            dim.dx + buffer_space,
+            dim.dy + buffer_space,
+            dim.dz,
+        )
+        if ems.include(virtual_dim):
+            return True
+        rotated_virtual_dim = Orthogonal3D(
+            dim.dy + buffer_space,
+            dim.dx + buffer_space,
+            dim.dz,
+        )
+        return ems.include(rotated_virtual_dim)
+
+    def _item_orientations(
+        self,
+        item: Orthogonal3D | SimpleBlock,
+    ) -> list[tuple[Orthogonal3D, Orthogonal3D]]:
+        dim = item.Dim if isinstance(item, SimpleBlock) else item
+        buffer_space = item.buffer_space if isinstance(item, SimpleBlock) else self.item_buffer_space
+        normal_virtual = Orthogonal3D(dim.dx + buffer_space, dim.dy + buffer_space, dim.dz)
+        rotated_dim = Orthogonal3D(dim.dy, dim.dx, dim.dz)
+        rotated_virtual = Orthogonal3D(dim.dy + buffer_space, dim.dx + buffer_space, dim.dz)
+        return [(dim, normal_virtual), (rotated_dim, rotated_virtual)]
+
+    def _ems_has_stable_fit(
+        self,
+        ems: EmptyMaximalSpace,
+        items: list[Orthogonal3D | SimpleBlock],
+    ) -> bool:
+        candidates = ems.FLB.topix()[None, :]
+        for item in items:
+            for dim, virtual_dim in self._item_orientations(item):
+                if not ems.include(virtual_dim):
+                    continue
+                stable_placements, is_stable = self.heu_stable(
+                    o3d=dim,
+                    hm=self.hm,
+                    candidates=candidates,
+                )
+                if (
+                    len(is_stable) > 0
+                    and stable_placements[0] is not None
+                    and stable_placements[0] == ems.FLB
+                    and bool(is_stable[0])
+                ):
+                    return True
+        return False
+
+    def _rank_fit_ems(
+        self,
+        ems_list: list[EmptyMaximalSpace],
+        items: list[Orthogonal3D | SimpleBlock],
+        prefer_stable: bool,
+    ) -> list[EmptyMaximalSpace]:
+        stable_cache = {}
+        if prefer_stable:
+            stable_cache = {
+                id(ems): self._ems_has_stable_fit(ems, items)
+                for ems in ems_list
+            }
+        return sorted(
+            ems_list,
+            key=lambda ems: (
+                0 if stable_cache.get(id(ems), False) else 1,
+                ems.FLB.z,
+                ems.FLB.y,
+                ems.FLB.x,
+                -ems.Volume,
+            ),
+        )
+
+    def _collapse_same_flb_ems(
+        self,
+        ems_list: list[EmptyMaximalSpace],
+    ) -> list[EmptyMaximalSpace]:
+        best_by_flb: dict[tuple[int, int, int], EmptyMaximalSpace] = {}
+        for ems in ems_list:
+            key = (ems.FLB.x, ems.FLB.y, ems.FLB.z)
+            current = best_by_flb.get(key)
+            if current is None or ems.Volume < current.Volume:
+                best_by_flb[key] = ems
+        return list(best_by_flb.values())
+
+    def _get_item_fit_ems_list(
+        self,
+        items=None,
+        *,
+        cap: bool = True,
+        prefer_stable: bool = False,
+    ) -> List[EmptyMaximalSpace]:
+        ems_list = self.heu_ems.get_all_ems()
+        if items is None:
+            items = self.buffer.all_blocks if self.use_simple_blocks else self.buffer.items
+        if isinstance(items, (Orthogonal3D, SimpleBlock)):
+            items = [items]
+        elif isinstance(items, np.ndarray):
+            items_arr = np.asarray(items)
+            if items_arr.ndim == 1:
+                items_arr = items_arr.reshape(1, -1)
+            items = [Orthogonal3D(*map(int, item)) for item in items_arr]
+        else:
+            normalized_items = []
+            for item in items:
+                if isinstance(item, (Orthogonal3D, SimpleBlock)):
+                    normalized_items.append(item)
+                    continue
+                item_arr = np.asarray(item).reshape(-1)
+                if item_arr.shape[0] != 3:
+                    raise ValueError("each item must contain exactly 3 dimensions")
+                normalized_items.append(Orthogonal3D(*map(int, item_arr)))
+            items = normalized_items
+        if not items:
+            return []
+
+        if len(items) == 1 and not prefer_stable:
+            return self._get_single_item_fit_ems_list(items[0], ems_list, cap=cap)
+
+        filtered = [
+            ems
+            for ems in ems_list
+            if any(self._ems_can_fit_item(ems, item) for item in items)
+        ]
+        if cap:
+            filtered = self._collapse_same_flb_ems(filtered)
+        filtered = self._rank_fit_ems(filtered, items, prefer_stable=prefer_stable)
+        if self.k_placement <= 0:
+            return []
+        return filtered[: self.k_placement] if cap else filtered
+
+    def _get_single_item_fit_ems_list(
+        self,
+        item: Orthogonal3D | SimpleBlock,
+        ems_list: list[EmptyMaximalSpace],
+        *,
+        cap: bool,
+    ) -> list[EmptyMaximalSpace]:
+        if not ems_list or self.k_placement <= 0:
+            return []
+
+        dim = item.Dim if isinstance(item, SimpleBlock) else item
+        buffer_space = item.buffer_space if isinstance(item, SimpleBlock) else self.item_buffer_space
+        flb = np.array([[ems.FLB.x, ems.FLB.y, ems.FLB.z] for ems in ems_list], dtype=np.int64)
+        dims = np.array([[ems.Dim.dx, ems.Dim.dy, ems.Dim.dz] for ems in ems_list], dtype=np.int64)
+        volume = dims[:, 0] * dims[:, 1] * dims[:, 2]
+        normal = np.array([dim.dx + buffer_space, dim.dy + buffer_space, dim.dz], dtype=np.int64)
+        rotated = np.array([dim.dy + buffer_space, dim.dx + buffer_space, dim.dz], dtype=np.int64)
+        fit_mask = np.all(dims >= normal, axis=1) | np.all(dims >= rotated, axis=1)
+        fit_indices = np.flatnonzero(fit_mask)
+        if fit_indices.size == 0:
+            return []
+
+        if cap:
+            best_by_flb: dict[tuple[int, int, int], int] = {}
+            for idx in fit_indices.tolist():
+                key = tuple(int(value) for value in flb[idx])
+                current = best_by_flb.get(key)
+                if current is None or volume[idx] < volume[current]:
+                    best_by_flb[key] = idx
+            fit_indices = np.array(list(best_by_flb.values()), dtype=np.int64)
+
+        order = np.lexsort(
+            (
+                -volume[fit_indices],
+                flb[fit_indices, 0],
+                flb[fit_indices, 1],
+                flb[fit_indices, 2],
+            )
+        )
+        ranked_indices = fit_indices[order]
+        if cap:
+            ranked_indices = ranked_indices[: self.k_placement]
+        return [ems_list[int(idx)] for idx in ranked_indices]
+
+    def select_largest_policy_block(self) -> SimpleBlock | None:
+        """Select the largest block that is usable in its policy-visible EMS set."""
+        ranked_blocks = sorted(
+            self.buffer.all_blocks,
+            key=lambda block: (
+                block.volume,
+                block.consumed_count,
+                block.Dim.dz,
+                block.Dim.dy,
+                block.Dim.dx,
+            ),
+            reverse=True,
+        )
+        for block in ranked_blocks:
+            ems_list = self._get_item_fit_ems_list([block])
+            if self.buffer._is_block_usable(block, ems_list, self.heu_stable, self.hm):
+                self.buffer.simple_blocks = {block.box: [block]}
+                return block
+        self.buffer.simple_blocks = {}
+        return None
+
     def _coerce_items(self, items) -> list[Orthogonal3D]:
         """Convert raw item dimensions or Orthogonal3D objects to a list."""
         if isinstance(items, Orthogonal3D):
             return [items]
+        if isinstance(items, SimpleBlock):
+            return [items.Dim]
 
         if isinstance(items, np.ndarray):
             items = np.asarray(items)
@@ -183,6 +393,9 @@ class PackingEnv(gym.Env):
         if not items:
             return []
 
+        if isinstance(items[0], SimpleBlock):
+            return [item.Dim for item in items]
+
         if not isinstance(items[0], Orthogonal3D):
             items_arr = np.asarray(items)
             if items_arr.ndim == 1:
@@ -194,6 +407,9 @@ class PackingEnv(gym.Env):
         for item in items:
             if isinstance(item, Orthogonal3D):
                 coerced_items.append(item)
+                continue
+            if isinstance(item, SimpleBlock):
+                coerced_items.append(item.Dim)
                 continue
 
             item_arr = np.asarray(item).reshape(-1)
@@ -243,11 +459,16 @@ class PackingEnv(gym.Env):
                 (N, 2, k_placement).
         """
         if items is None:
-            items = self.buffer.items
+            if self.use_simple_blocks:
+                self.select_largest_policy_block()
+                items = self.buffer.all_blocks
+            else:
+                items = self.buffer.items
+        raw_items = items
         items = self._coerce_items(items)
         num_items = len(items)
 
-        ems_list = self.heu_ems.get_ems_list()
+        ems_list = self._get_item_fit_ems_list(raw_items)
         self.ems_list = ems_list
         if vectorized_ems is None:
             vectorized_ems = self.get_vectorized_ems(ems_list=ems_list)
@@ -258,10 +479,16 @@ class PackingEnv(gym.Env):
             mask = self.get_feasible_mask(items, ems_list=ems_list)
         mask = np.asarray(mask).astype(bool).reshape(num_items, 2, self.k_placement)
 
-        item_raw = np.array([item.raw() for item in items]).astype(np.float32).reshape(num_items, 3)
+        if num_items == 0:
+            item_raw = np.zeros((0, 3), dtype=np.float32)
+        else:
+            item_raw = np.array([item.raw() for item in items]).astype(np.float32).reshape(num_items, 3)
         ems_normalized = vectorized_ems.copy().astype(np.float32)
         ems_normalized[:, :3] = ems_normalized[:, :3] / self.bin_size
         ems_normalized[:, 3:] = ems_normalized[:, 3:] / self.bin_size
+        done = np.ones((num_items,), dtype=bool)
+        if num_items > 0:
+            done = ~mask.reshape(num_items, -1).any(axis=1)
 
         data = {
             "new_item": item_raw / self.bin_size[None, :],
@@ -273,7 +500,7 @@ class PackingEnv(gym.Env):
                 vectorized_ems.reshape(1, self.k_placement, 6).astype(np.float32),
                 [num_items, 1, 1],
             ),
-            "done": ~mask.reshape(num_items, -1).any(axis=1),
+            "done": done,
         }
         data["item"] = data["new_item"]
         data["item_raw"] = item_raw
@@ -283,8 +510,11 @@ class PackingEnv(gym.Env):
 
 
     def get_next_observation(self):
-        ems_list = self.heu_ems.get_ems_list()
-        self.ems_list = ems_list
+        if self.use_simple_blocks:
+            self.select_largest_policy_block()
+        else:
+            ems_list = self._get_item_fit_ems_list()
+            self.ems_list = ems_list
         if not self.buffer.has_items:
             self.done = True
             self.current_obs = {
@@ -295,14 +525,28 @@ class PackingEnv(gym.Env):
             }
             self.selected_item = None
             return self.current_obs
+        if self.use_simple_blocks and len(self.buffer.all_blocks) == 0:
+            self.done = True
+            self.current_obs = {
+                'new_item': np.zeros((3,), dtype=np.float32),
+                'buffer_space': np.array([self.item_buffer_space], dtype=np.int32),
+                'ems': np.zeros((self.k_placement*6,), dtype=np.float32),
+                'action_mask': np.zeros((2, self.k_placement), dtype=bool)
+            }
+            self.selected_item = None
+            return self.current_obs
 
+        if self.use_simple_blocks:
+            item = self.buffer.sample_blocks(deterministic=True)
+        else:
+            item = self.buffer.sample_item()
+        ems_list = self._get_item_fit_ems_list([item])
+        self.ems_list = ems_list
         vectorized_ems = self.get_vectorized_ems(ems_list=ems_list)
         ems = vectorized_ems.copy()
         ems[:,:3] = ems[:,:3]/self.bin_size
         ems[:,3:] = ems[:,3:]/self.bin_size
-
         self.candidates = vectorized_ems.copy()
-        item = self.buffer.sample_item()
         self.new_item = item.raw()
         lps = np.array(
             [ele.FLB.topix() for ele in ems_list]
@@ -324,7 +568,7 @@ class PackingEnv(gym.Env):
 
     def _step(
         self,
-        item_dim: Orthogonal3D,
+        source_item: Orthogonal3D | SimpleBlock,
         placed_item: Item,
         selected_ems: EmptyMaximalSpace,
     ) -> None:
@@ -332,7 +576,7 @@ class PackingEnv(gym.Env):
         self.heu_stable.update(box=placed_item, hm=self.hm)
         self.container.add(box=placed_item)
         self.hm.update(box=placed_item)
-        self.buffer.update(item_dim)
+        self.buffer.update(source_item)
         self.heu_ems.update(box=placed_item, selected_ems=selected_ems, hm=self.hm)
 
     def pack(
@@ -418,20 +662,15 @@ class PackingEnv(gym.Env):
         Returns:
             Tuple of (next_obs, reward, done, truncated, info)
         """
-        item_dim = self.selected_item
+        selected_block = self.selected_item
         
         # Decode action to position and rotation
         pos, rot, selected_ems = self.idx2pos(action)
         
         # Place item with appropriate rotation
-        if rot:
-            placed_dim = Orthogonal3D(item_dim.dy, item_dim.dx, item_dim.dz)
-        else:
-            placed_dim = item_dim
-        placed_item = Item(
-            FLB=Point3D(*pos),
-            Dim=placed_dim,
-            buffer_space=self.item_buffer_space,
+        placed_item = selected_block.to_item(
+            flb=Point3D(*pos),
+            rotate_xy=rot,
         )
         
         self.img_counter += 1
@@ -439,7 +678,7 @@ class PackingEnv(gym.Env):
         # Calculate stability reward (feasible area reduction)
         # feasible_area_before = np.sum(self.heu_stable.Value == 0)
         try:
-            self._step(item_dim, placed_item, selected_ems)
+            self._step(selected_block, placed_item, selected_ems)
         except Exception as e:
             print(pos)
             print(f"Error in placement step: {e}")
@@ -495,17 +734,20 @@ class PackingEnv(gym.Env):
         
         Saves visualization showing container with packed items and support regions.
         """
-        if self._render_visualizer is None:
-            self._render_visualizer = PackVisualizer(
-                self,
-                title="Buffer + Stability Support",
-            )
-        else:
-            self._render_visualizer.env = self
-            self._render_visualizer.title = "Buffer + Stability Support"
-        fig, _ = self._render_visualizer.refresh()
-        if fig is not None:
-            fig.write_html("buffer_support_live.html", auto_open=False, include_plotlyjs="cdn")
+        import json
+
+        from packing.interactive_replay import REPLAY_TEMPLATE
+        from packing.three_scene import build_three_scene
+
+        title = "Buffer + Stability Support"
+        scene = build_three_scene(self, title, show_ems=True)
+        html = REPLAY_TEMPLATE.replace(
+            "__FRAMES__",
+            json.dumps([{"title": title, "scene": scene}]),
+        )
+        html = html.replace("__INTERVAL_MS__", "700")
+        with open("buffer_support_live.html", "w", encoding="utf-8") as f:
+            f.write(html)
 
     def seed(self, seed_value: Optional[int] = None) -> None:
         """Set random seed for reproducibility.

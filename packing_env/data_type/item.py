@@ -179,4 +179,146 @@ class Item:
         flb = self.True_FLB
         return np.array([flb.Gx + self.Dim.Gdx / 2, flb.Gy + self.Dim.Gdy / 2])
 
-__all__ = ["Item"]
+class SimpleBlock:
+    """Placeable block candidate generated from buffered box dimensions."""
+
+    def __init__(
+        self,
+        Dim: Orthogonal3D | None = None,
+        *,
+        box: Orthogonal3D | None = None,
+        stack_dims: tuple[int, int, int] = (1, 1, 1),
+        buffer_space: int = 0,
+        FLB: Point3D | None = None,
+        rot: bool = False,
+        preserve_order: bool = False,
+    ) -> None:
+        if Dim is None and box is None:
+            raise ValueError("SimpleBlock requires either Dim or box.")
+        if Dim is not None and box is not None:
+            raise ValueError("SimpleBlock accepts only one of Dim or box.")
+        self.box = Dim if Dim is not None else box
+        self.stack_dims = tuple(int(value) for value in stack_dims)
+        if len(self.stack_dims) != 3 or any(value <= 0 for value in self.stack_dims):
+            raise ValueError("stack_dims must contain three positive integers.")
+        self.buffer_space = int(buffer_space)
+        if self.buffer_space < 0:
+            raise ValueError("buffer_space must be non-negative.")
+        self.FLB = FLB
+        self.rot = bool(rot)
+        self.preserve_order = bool(preserve_order)
+
+    @property
+    def Dim(self) -> Orthogonal3D:
+        nx, ny, nz = self.stack_dims
+        return Orthogonal3D(self.box.dx * nx, self.box.dy * ny, self.box.dz * nz)
+
+    @property
+    def no_boxes_wrt_axis(self) -> tuple[int, int, int]:
+        return self.stack_dims
+
+    @property
+    def consumed_count(self) -> int:
+        nx, ny, nz = self.stack_dims
+        return nx * ny * nz
+
+    @property
+    def dx(self) -> int:
+        return self.Dim.dx
+
+    @property
+    def dy(self) -> int:
+        return self.Dim.dy
+
+    @property
+    def dz(self) -> int:
+        return self.Dim.dz
+
+    @property
+    def Gdx(self) -> int:
+        return self.Dim.Gdx
+
+    @property
+    def Gdy(self) -> int:
+        return self.Dim.Gdy
+
+    @property
+    def Gdz(self) -> int:
+        return self.Dim.Gdz
+
+    @property
+    def Hdx(self) -> int:
+        return self.Dim.Hdx
+
+    @property
+    def Hdy(self) -> int:
+        return self.Dim.Hdy
+
+    @property
+    def Virtual_Dim(self) -> Orthogonal3D:
+        dim = self.Dim
+        return Orthogonal3D(
+            dim.dx + self.buffer_space,
+            dim.dy + self.buffer_space,
+            dim.dz,
+        )
+
+    @property
+    def volume(self) -> int:
+        return self.Dim.Volume
+
+    def raw(self) -> np.ndarray:
+        return self.Dim.raw()
+
+    def place(self, flb: Point3D) -> None:
+        self.FLB = flb
+
+    def transpose(self) -> "SimpleBlock":
+        nx, ny, nz = self.stack_dims
+        return SimpleBlock(
+            box=Orthogonal3D(self.box.dy, self.box.dx, self.box.dz),
+            stack_dims=(ny, nx, nz),
+            buffer_space=self.buffer_space,
+            FLB=self.FLB,
+            rot=not self.rot,
+            preserve_order=self.preserve_order,
+        )
+
+    def rotated(self, rotate_xy: bool) -> "SimpleBlock":
+        if not rotate_xy:
+            return SimpleBlock(
+                box=self.box,
+                stack_dims=self.stack_dims,
+                buffer_space=self.buffer_space,
+                FLB=self.FLB,
+                rot=self.rot,
+                preserve_order=self.preserve_order,
+            )
+        return self.transpose()
+
+    def to_item(self, flb: Point3D | None = None, rotate_xy: bool | None = None) -> Item:
+        place_flb = self.FLB if flb is None else flb
+        if place_flb is None:
+            raise ValueError("SimpleBlock requires FLB to build an Item")
+
+        apply_rot = self.rot if rotate_xy is None else bool(rotate_xy)
+        dim = self.transpose().Dim if apply_rot else self.Dim
+        placed = Item(FLB=place_flb, Dim=dim, buffer_space=self.buffer_space)
+        placed.rot = bool(apply_rot)
+        return placed
+
+    def __add__(self, other: Item | "SimpleBlock" | int):
+        if isinstance(other, int):
+            return self.Dim.Volume + other
+        return self.Dim.Volume + other.Dim.Volume
+
+    def __radd__(self, other: int):
+        if other == 0:
+            return self.Dim.Volume
+        return self.__add__(other)
+
+    def __repr__(self):
+        return f"SimpleBlock(box={self.box.raw()}, stack_dims={self.stack_dims})"
+
+
+__all__ = ["Item", "SimpleBlock"]
