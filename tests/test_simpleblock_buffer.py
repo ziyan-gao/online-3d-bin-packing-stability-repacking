@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -259,7 +260,7 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
 
     agent = ShapeCheckingAgent()
 
-    _, _, reached = test_utils.pack_until_blocked(
+    _, _, reached, episode_reward = test_utils.pack_until_blocked(
         config,
         env,
         agent,
@@ -268,6 +269,7 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
     )
 
     assert reached is True
+    assert episode_reward == pytest.approx(env.container.utilization)
     assert agent.observed_item_count == 1
     assert len(env.container.placed_items) == 1
     assert env.container.placed_items[0].Dim.raw().tolist() == [100, 100, 150]
@@ -296,7 +298,7 @@ def test_pack_until_blocked_handles_no_usable_simple_blocks():
         use_simple_blocks=True,
     )
 
-    blocked_item, pack_history, reached = test_utils.pack_until_blocked(
+    blocked_item, pack_history, reached, episode_reward = test_utils.pack_until_blocked(
         config,
         env,
         DeterministicPlacementAgent(),
@@ -307,6 +309,7 @@ def test_pack_until_blocked_handles_no_usable_simple_blocks():
     assert blocked_item is None
     assert pack_history == []
     assert reached is False
+    assert episode_reward == 0.0
 
 
 def test_get_pack_data_accepts_empty_items():

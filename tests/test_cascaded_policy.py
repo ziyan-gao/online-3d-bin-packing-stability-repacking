@@ -25,6 +25,7 @@ import packing.test_utils as test_utils
 from packing.test_utils import (
     DEFAULT_TEST_CONFIG,
     PROJECT_ROOT as TEST_PROJECT_ROOT,
+    accumulate_step_reward,
     build_agent,
     build_env,
     load_test_config,
@@ -129,6 +130,22 @@ def test_test_cj_default_uses_baseline_block_checkpoint():
     assert config.use_simple_blocks
     assert config.policy_mode == "largest_block_baseline"
     assert config.use_mcts is False
+
+
+def test_accumulate_step_reward_prints_step_and_total(capsys):
+    reward_total = accumulate_step_reward(
+        reward_total=0.25,
+        reward=0.125,
+        step=2,
+        utilization=0.5,
+        placed_count=4,
+    )
+
+    captured = capsys.readouterr()
+    assert reward_total == pytest.approx(0.375)
+    assert "policy step=2" in captured.out
+    assert "reward=0.125000" in captured.out
+    assert "episode_reward=0.375000" in captured.out
 
 
 def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):

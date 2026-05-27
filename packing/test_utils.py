@@ -157,8 +157,29 @@ def annotate_source_item_count(box, source_item) -> None:
     box.source_item_count = int(getattr(source_item, "consumed_count", 1))
 
 
+def accumulate_step_reward(
+    reward_total: float,
+    reward: float,
+    step: int,
+    utilization: float,
+    placed_count: int,
+) -> float:
+    reward_total += float(reward)
+    print(
+        "policy step={}, reward={:.6f}, episode_reward={:.6f}, utilization={:.4f}, placed={}".format(
+            step,
+            float(reward),
+            reward_total,
+            utilization,
+            placed_count,
+        )
+    )
+    return reward_total
+
+
 def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, visualizer: Visualizer):
     pack_history = []
+    episode_reward = 0.0
     for step in range(config.max_steps):
         if getattr(config, "policy_mode", "largest_block_baseline") == "cascaded_block_selector":
             obs = env.get_next_observation()
@@ -173,7 +194,7 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
                 )
                 blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
                 visualizer.push(env, blocked_title)
-                return None, pack_history, False
+                return None, pack_history, False, episode_reward
 
             action = agent.predict(obs)
             _, _, selected_block, selected_ems = env.decode_cascaded_action(action)
@@ -182,22 +203,22 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
             visualizer.push(env, pack_title)
             box = selected_block.to_item(selected_ems.FLB)
             annotate_source_item_count(box, selected_block.block)
-            env.step(action)
+            _, reward, _, _, _ = env.step(action)
             pack_history.append(
                 record_pack_step(box, selected_block.block, buffer_before, env)
             )
             env.validate_packing_state()
-            print(
-                "policy step={}, utilization={:.4f}, placed={}".format(
-                    step,
-                    env.container.utilization,
-                    len(env.container.placed_items),
-                )
+            episode_reward = accumulate_step_reward(
+                episode_reward,
+                reward,
+                step,
+                env.container.utilization,
+                len(env.container.placed_items),
             )
 
             if env.container.utilization >= config.target_util:
                 print("target utilization reached before MCTS was needed")
-                return None, pack_history, True
+                return None, pack_history, True, episode_reward
             continue
 
         if config.use_simple_blocks:
@@ -216,7 +237,7 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
                 )
                 blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
                 visualizer.push(env, blocked_title)
-                return None, pack_history, False
+                return None, pack_history, False, episode_reward
         else:
             candidate_items = [env.buffer.sample_item()]
             obs = env.get_pack_data(candidate_items[0])
@@ -232,7 +253,12 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
             )
             blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
             visualizer.push(env, blocked_title)
-            return candidate_items[0] if candidate_items else None, pack_history, False
+            return (
+                candidate_items[0] if candidate_items else None,
+                pack_history,
+                False,
+                episode_reward,
+            )
 
         box, (item_idx, action_idx, _) = agent.predict(obs)
         item = candidate_items[item_idx]
@@ -243,21 +269,22 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
             visualizer.push_buffer_selection(env, pack_title, item)
         else:
             visualizer.push(env, pack_title)
+        reward = box.Dim.Volume / env.container.Volume
         env.pack(box, selected_ems=env.ems_list[action_idx % env.k_placement])
         env.buffer.update(item)
         pack_history.append(record_pack_step(box, item, buffer_before, env))
         env.validate_packing_state()
-        print(
-            "policy step={}, utilization={:.4f}, placed={}".format(
-                step,
-                env.container.utilization,
-                len(env.container.placed_items),
-            )
+        episode_reward = accumulate_step_reward(
+            episode_reward,
+            reward,
+            step,
+            env.container.utilization,
+            len(env.container.placed_items),
         )
 
         if env.container.utilization >= config.target_util:
             print("target utilization reached before MCTS was needed")
-            return None, pack_history, True
+            return None, pack_history, True, episode_reward
 
     raise AssertionError(f"no blocked item found within {config.max_steps} steps")
 
@@ -314,6 +341,10 @@ def replay_search_result(config: TestConfig, env: PackingEnv, seed: int, visuali
     return replay_env, plan, execution_plan, step_prefix
 
 
+def print_final_episode_reward(seed: int, episode_reward: float) -> None:
+    print("final episode reward seed={}: {:.6f}".format(seed, float(episode_reward)))
+
+
 def validate_sequence(config: TestConfig, seed: int) -> dict:
     set_eval_seed(seed)
 
@@ -324,7 +355,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
     initial_buffer = env.buffer.dims()
     visualizer.push(env, f"Initial State - seed {seed}")
 
-    blocked_item, pack_history, target_reached = pack_until_blocked(
+    blocked_item, pack_history, target_reached, episode_reward = pack_until_blocked(
         config,
         env,
         agent,
@@ -334,6 +365,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
     reject_unsupported_cascaded_mcts(config, target_reached)
 
     if target_reached:
+        print_final_episode_reward(seed, episode_reward)
         visualizer.save_sequence_replay(
             seed,
             initial_buffer,
@@ -344,6 +376,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
         return make_summary(seed, "target_before_mcts", env)
 
     if not config.use_mcts:
+        print_final_episode_reward(seed, episode_reward)
         visualizer.save_sequence_replay(
             seed,
             initial_buffer,
@@ -355,6 +388,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
 
     result = run_mcts_search(config, env, agent, blocked_item)
     if result is None:
+        print_final_episode_reward(seed, episode_reward)
         visualizer.save_sequence_replay(
             seed,
             initial_buffer,
@@ -379,6 +413,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
         step_prefix=step_prefix,
     )
     visualizer.hold()
+    print_final_episode_reward(seed, episode_reward)
 
     packed_incoming = any(operation.is_incoming for operation in plan.pack_sequence)
     assert packed_incoming or replay_env.container.utilization >= config.target_util
