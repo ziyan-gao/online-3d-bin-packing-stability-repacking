@@ -285,3 +285,10 @@ Focused tests should verify:
 - Replacing PPO or the discrete-action training interface.
 - Adding MCTS-aware training rewards in the first implementation.
 - Adding per-block auxiliary value heads in the first implementation.
+
+## Implementation Notes
+
+The implementation plan is saved at
+`docs/superpowers/plans/2026-05-27-cascaded-block-selector.md`.
+
+Cascaded MCTS is intentionally rejected in this first implementation.
