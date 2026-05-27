@@ -70,15 +70,15 @@ services:
       --ServerApp.password=''
       --ServerApp.default_url=/lab/tree/examples/tutorials/packing_demo.ipynb"
 
-  train-gpu:
+  train-baseline-gpu:
     <<: *app-common
-    container_name: cj-block-train-gpu
+    container_name: cj-block-train-baseline-gpu
     profiles: ["gpu"]
     tty: true
     stdin_open: true
     ports:
-      - "${LIVE_PLOT_HOST_PORT_GPU:-8769}:8765"
-      - "${TB_HOST_PORT_GPU:-16006}:6006"
+      - "${LIVE_PLOT_HOST_PORT_BASELINE_GPU:-8769}:8765"
+      - "${TB_HOST_PORT_BASELINE_GPU:-16006}:6006"
     gpus: all
     environment:
       MPLCONFIGDIR: /tmp/matplotlib
@@ -88,9 +88,13 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     command: >
-      bash -lc "mkdir -p /app/log/tensorboard/docker-gpu &&
-      python train.py --config configs/train_default.yaml &
-      tensorboard --logdir /app/log/tensorboard/docker-gpu --host 0.0.0.0 --port 6006 && wait"
+      bash -lc "mkdir -p /app/log/tensorboard;
+      tensorboard --logdir /app/log/tensorboard --host 0.0.0.0 --port 6006 &
+      python train.py --config configs/train_default.yaml
+      --output-name baseline-blocks
+      --stack-only
+      --use-simple-blocks
+      --policy-mode largest_block_baseline"
     deploy:
       resources:
         reservations:
@@ -98,3 +102,44 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+  train-cascaded-gpu:
+    <<: *app-common
+    container_name: cj-block-train-cascaded-gpu
+    profiles: ["gpu"]
+    tty: true
+    stdin_open: true
+    ports:
+      - "${LIVE_PLOT_HOST_PORT_CASCADED_GPU:-8770}:8765"
+      - "${TB_HOST_PORT_CASCADED_GPU:-16007}:6006"
+    gpus: all
+    environment:
+      MPLCONFIGDIR: /tmp/matplotlib
+      XDG_CACHE_HOME: /tmp
+      LIVE_PLOT_BIND_HOST: 0.0.0.0
+      LIVE_PLOT_PUBLIC_HOST: localhost
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    command: >
+      bash -lc "mkdir -p /app/log/tensorboard;
+      tensorboard --logdir /app/log/tensorboard --host 0.0.0.0 --port 6006 &
+      python train.py --config configs/train_default.yaml
+      --output-name cascaded-block-selector
+      --stack-only
+      --use-simple-blocks
+      --policy-mode cascaded_block_selector"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  train-gpu:
+    extends:
+      service: train-baseline-gpu
+    container_name: cj-block-train-gpu
+    ports:
+      - "${LIVE_PLOT_HOST_PORT_GPU:-8769}:8765"
+      - "${TB_HOST_PORT_GPU:-16006}:6006"

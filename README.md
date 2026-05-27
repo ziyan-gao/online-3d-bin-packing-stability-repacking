@@ -331,10 +331,16 @@ Start the tutorial notebook:
 docker compose -f docker/docker-compose.yml up notebook
 ```
 
-Run GPU training:
+Train the baseline block policy on GPU:
 
 ```bash
-docker compose -f docker/docker-compose.yml --profile gpu up train-gpu
+docker compose -f docker/docker-compose.yml --profile gpu up train-baseline-gpu
+```
+
+Train the cascaded block selector policy on GPU:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile gpu up train-cascaded-gpu
 ```
 
 More Docker notes are in `docker/README.md`.

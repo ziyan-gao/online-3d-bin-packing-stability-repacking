@@ -131,17 +131,37 @@ To install/configure and then run the project GPU smoke check:
 sudo bash docker/setup_nvidia_docker_and_compose.sh --gpu-check
 ```
 
-Start the GPU training service:
+Train the block baseline policy:
 
 ```bash
-docker compose -f docker/docker-compose.yml --profile gpu up train-gpu
+docker compose -f docker/docker-compose.yml --profile gpu up train-baseline-gpu
 ```
 
-TensorBoard is exposed at:
+This writes checkpoints under:
 
 ```text
-http://localhost:16006
+outputs/train_outputs/baseline-blocks/
 ```
+
+Train the cascaded block selector policy:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile gpu up train-cascaded-gpu
+```
+
+This writes checkpoints under:
+
+```text
+outputs/train_outputs/cascaded-block-selector/
+```
+
+Both services use vertical SimpleBlock candidates with the same buffer settings
+from `configs/train_default.yaml`. The baseline service keeps the largest usable
+block policy, while the cascaded service trains the new block selector policy.
+
+TensorBoard is exposed at `http://localhost:16006` for baseline training and
+`http://localhost:16007` for cascaded training. The older `train-gpu` service is
+kept as a baseline-compatible alias.
 
 Quick GPU check:
 
