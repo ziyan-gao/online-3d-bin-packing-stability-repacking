@@ -14,6 +14,7 @@ def draw_right_up_plot(
     return drawer.draw_linear_items_scene(
         items=buffer.items,
         color_lookup=buffer.data_sampler.get_color,
+        highlight_indices=getattr(buffer, "visual_highlight_indices", None),
         row=1,
         col=2,
     )

@@ -36,8 +36,14 @@
     let hoveredCandidateMesh = null;
     let threeReady = false;
     let resetCameraOnNextRender = false;
+    let bufferRenderer = null;
+    let bufferScene = null;
+    let bufferCamera = null;
+    let bufferControls = null;
+    let bufferItemsGroup = null;
+    let bufferReady = false;
 
-    // Small formatting and color helpers shared by the two Plotly scenes.
+    // Small formatting and color helpers shared by the Three.js scenes.
     function dimsText(item) {
       if (!item) return "-";
       return `${item.dx} x ${item.dy} x ${item.dz}`;
@@ -79,71 +85,6 @@
       return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
     }
 
-    // Right-side buffer items still use Plotly surface traces.
-    function colorScale(color) {
-      return [[0, color], [1, color]];
-    }
-
-    function boxSurfaceTraces(item, color, name, scene = undefined) {
-      const x0 = item.x, x1 = item.x + item.dx;
-      const y0 = item.y, y1 = item.y + item.dy;
-      const z0 = item.z, z1 = item.z + item.dz;
-      const faces = [
-        { x: [[x0, x1], [x0, x1]], y: [[y0, y0], [y1, y1]], z: [[z0, z0], [z0, z0]] },
-        { x: [[x0, x1], [x0, x1]], y: [[y0, y0], [y1, y1]], z: [[z1, z1], [z1, z1]] },
-        { x: [[x0, x1], [x0, x1]], y: [[y0, y0], [y0, y0]], z: [[z0, z0], [z1, z1]] },
-        { x: [[x0, x1], [x0, x1]], y: [[y1, y1], [y1, y1]], z: [[z0, z0], [z1, z1]] },
-        { x: [[x0, x0], [x0, x0]], y: [[y0, y1], [y0, y1]], z: [[z0, z0], [z1, z1]] },
-        { x: [[x1, x1], [x1, x1]], y: [[y0, y1], [y0, y1]], z: [[z0, z0], [z1, z1]] },
-      ];
-      return faces.map(face => ({
-        type: "surface",
-        name,
-        x: face.x,
-        y: face.y,
-        z: face.z,
-        surfacecolor: [[1, 1], [1, 1]],
-        colorscale: colorScale(color),
-        cmin: 0,
-        cmax: 1,
-        opacity: 1,
-        showscale: false,
-        hoverinfo: "none",
-        showlegend: false,
-        lighting: { ambient: 1, diffuse: 0, specular: 0, roughness: 1, fresnel: 0 },
-        scene,
-      }));
-    }
-
-    function boxOutlineTrace(item, name, color = "rgba(15,23,42,0.9)", scene = undefined) {
-      const x0 = item.x, x1 = item.x + item.dx;
-      const y0 = item.y, y1 = item.y + item.dy;
-      const z0 = item.z, z1 = item.z + item.dz;
-      const p = [
-        [x0,y0,z0], [x1,y0,z0], [x1,y1,z0], [x0,y1,z0], [x0,y0,z0],
-        [x0,y0,z1], [x1,y0,z1], [x1,y1,z1], [x0,y1,z1], [x0,y0,z1],
-        [x1,y0,z1], [x1,y0,z0], [x1,y1,z0], [x1,y1,z1],
-        [x0,y1,z1], [x0,y1,z0], [x0,y0,z0], [x0,y0,z1]
-      ];
-      const trace = wireTrace(p, `${name} edge`, color, 4);
-      trace.scene = scene;
-      return trace;
-    }
-
-    function wireTrace(points, name, color = "rgba(17,24,39,0.72)", width = 4) {
-      return {
-        type: "scatter3d",
-        mode: "lines",
-        name,
-        x: points.map(p => p[0]),
-        y: points.map(p => p[1]),
-        z: points.map(p => p[2]),
-        line: { color, width },
-        hoverinfo: "none",
-        showlegend: false,
-      };
-    }
-
     function sameCandidate(left, right) {
       return Boolean(
         left && right &&
@@ -154,8 +95,7 @@
       );
     }
 
-    // Three.js main scene. Plotly stays on the right-side buffer view, while
-    // the bin uses native 3D picking so hover does not rebuild a Plotly figure.
+    // Three.js main scene. Native 3D picking keeps hover updates cheap.
     function toThreePoint(x, y, z) {
       return new THREE.Vector3(x, z, y);
     }
@@ -345,6 +285,60 @@
       threeRenderer.render(threeScene, threeCamera);
     }
 
+    function initializeBufferScene() {
+      if (bufferReady) return;
+      bufferScene = new THREE.Scene();
+      bufferScene.background = new THREE.Color(0xffffff);
+      bufferCamera = new THREE.PerspectiveCamera(45, bufferPlot.clientWidth / bufferPlot.clientHeight, 1, 6000);
+      bufferCamera.position.set(760, 420, 760);
+      bufferRenderer = new THREE.WebGLRenderer({ antialias: true });
+      bufferRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      bufferRenderer.setSize(bufferPlot.clientWidth, bufferPlot.clientHeight);
+      bufferPlot.innerHTML = "";
+      bufferPlot.appendChild(bufferRenderer.domElement);
+
+      bufferControls = new OrbitControls(bufferCamera, bufferRenderer.domElement);
+      bufferControls.enableDamping = true;
+      bufferControls.target.set(300, 90, 90);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.82);
+      const directional = new THREE.DirectionalLight(0xffffff, 0.6);
+      directional.position.set(500, 850, 600);
+      bufferItemsGroup = new THREE.Group();
+      bufferScene.add(ambient, directional, bufferItemsGroup);
+
+      window.addEventListener("resize", resizeBufferScene);
+      bufferRenderer.setAnimationLoop(() => {
+        bufferControls.update();
+        bufferRenderer.render(bufferScene, bufferCamera);
+      });
+      bufferReady = true;
+    }
+
+    function resizeBufferScene() {
+      if (!bufferReady || !bufferPlot.clientWidth || !bufferPlot.clientHeight) return;
+      bufferCamera.aspect = bufferPlot.clientWidth / bufferPlot.clientHeight;
+      bufferCamera.updateProjectionMatrix();
+      bufferRenderer.setSize(bufferPlot.clientWidth, bufferPlot.clientHeight);
+      renderBufferThree();
+    }
+
+    function renderBufferThree() {
+      if (!bufferReady) return;
+      bufferRenderer.render(bufferScene, bufferCamera);
+    }
+
+    function resetBufferCamera(maxX, maxY, maxZ) {
+      if (!bufferReady) return;
+      const span = Math.max(maxX, maxY, maxZ, 300);
+      bufferControls.target.set(maxX / 2, maxZ / 2, maxY / 2);
+      bufferCamera.position.set(maxX / 2 + span * 1.05, maxZ / 2 + span * 0.62, maxY / 2 + span * 1.05);
+      bufferCamera.near = 1;
+      bufferCamera.far = Math.max(6000, span * 8);
+      bufferCamera.updateProjectionMatrix();
+      bufferControls.update();
+    }
+
     function pickCandidate(event) {
       const rect = threeRenderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -442,6 +436,9 @@
 
     function renderBufferScene() {
       if (!state) return;
+      const wasReady = bufferReady;
+      initializeBufferScene();
+      clearGroup(bufferItemsGroup);
       const items = [];
       if (state.currentItem) {
         items.push({ item: state.currentItem, label: "Current", current: true });
@@ -450,41 +447,41 @@
         items.push({ item, label: `Buffer ${idx + 1}`, current: false });
       });
 
-      const traces = [];
       let xOffset = 0;
       let maxX = 300;
       let maxY = 300;
       let maxZ = 300;
       items.forEach((entry, idx) => {
         const box = bufferBoxFromItem(entry.item, idx, xOffset);
-        traces.push(...boxSurfaceTraces(box, colorForDims(box), entry.label));
-        traces.push(boxOutlineTrace(box, entry.label));
+        addBox(
+          bufferItemsGroup,
+          box,
+          colorForDims(box),
+          entry.current ? 0.92 : 0.78,
+          true
+        );
+        if (entry.current) {
+          const marker = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              color: 0x0f766e,
+              transparent: true,
+              opacity: 0.92,
+            })
+          );
+          marker.position.set(box.x + box.dx / 2, box.z + box.dz + 28, box.y + box.dy / 2);
+          marker.scale.set(28, 28, 1);
+          bufferItemsGroup.add(marker);
+        }
         xOffset += box.dx + 110;
         maxX = Math.max(maxX, xOffset);
         maxY = Math.max(maxY, box.dy);
         maxZ = Math.max(maxZ, box.dz);
       });
-
-      const layout = {
-        margin: { l: 0, r: 0, t: 0, b: 0 },
-        paper_bgcolor: "white",
-        plot_bgcolor: "white",
-        showlegend: false,
-        uirevision: "buffer-scene",
-        scene: {
-          xaxis: { title: "", range: [-20, maxX], backgroundcolor: "rgb(248,250,252)", gridcolor: "rgb(226,232,240)" },
-          yaxis: { title: "", range: [-20, maxY + 40], backgroundcolor: "rgb(248,250,252)", gridcolor: "rgb(226,232,240)" },
-          zaxis: { title: "", range: [-20, maxZ + 40], backgroundcolor: "rgb(248,250,252)", gridcolor: "rgb(226,232,240)" },
-          aspectmode: "manual",
-          aspectratio: {
-            x: maxX / Math.max(maxX, maxY + 40, maxZ + 40),
-            y: (maxY + 40) / Math.max(maxX, maxY + 40, maxZ + 40),
-            z: (maxZ + 40) / Math.max(maxX, maxY + 40, maxZ + 40),
-          },
-          camera: { eye: { x: 1.55, y: 1.45, z: 0.95 } },
-        },
-      };
-      Plotly.react(bufferPlot, traces, layout, { responsive: true, displaylogo: false });
+      if (!wasReady) {
+        resetBufferCamera(maxX, maxY + 40, maxZ + 40);
+      }
+      resizeBufferScene();
+      renderBufferThree();
     }
 
     // Browser events and API calls.

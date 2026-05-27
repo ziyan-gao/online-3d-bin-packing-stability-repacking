@@ -357,6 +357,7 @@ class Drawer:
         color_lookup,
         row: int,
         col: int,
+        highlight_indices: list[int] | set[int] | None = None,
         fixed_x_range: float | None = None,
         fixed_y_range: tuple[float, float] | None = None,
         fixed_z_range: tuple[float, float] | None = None,
@@ -370,7 +371,8 @@ class Drawer:
         max_x = 0.0
         max_y = 0.0
         max_z = 0.0
-        for box in items:
+        highlighted = set(highlight_indices or [])
+        for index, box in enumerate(items):
             dx, dy, dz = self.box_dims(box)
             color = self._to_rgb(color_lookup((dx, dy, dz)))
             self._add_box_mesh(
@@ -386,6 +388,21 @@ class Drawer:
                 row=row,
                 col=col,
             )
+            if index in highlighted:
+                self._add_wire_prism(
+                    [
+                        (x_offset, 0.0),
+                        (x_offset + float(dx), 0.0),
+                        (x_offset + float(dx), float(dy)),
+                        (x_offset, float(dy)),
+                    ],
+                    0.0,
+                    float(dz),
+                    color=self.config.moving_item_edge_color,
+                    width=9,
+                    row=row,
+                    col=col,
+                )
             x_offset += float(dx) + 50.0
             max_x = max(max_x, x_offset)
             max_y = max(max_y, float(dy))

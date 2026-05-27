@@ -23,12 +23,14 @@ class PackVisualizer:
         title: str = "Buffer + Support",
         show_anchor: bool = True,
         show_ems: bool = False,
+        ems_mode: str = "raw",
     ) -> None:
         self.env = env
         self.config = config
         self.title = title
         self.show_anchor = show_anchor
         self.show_ems = show_ems
+        self.ems_mode = ems_mode
         self._previous_placed_items = list(env.container.placed_items)
         self.highlighted_items: list[Item] | None = None
         self.repacked_items: list[Item] | None = None
@@ -117,8 +119,8 @@ class PackVisualizer:
         )
 
     def _draw_left_plot(self, drawer: Drawer) -> None:
-        anchor_points = self.env.heu_ems.get_anchor_points() if self.show_anchor else None
-        ems_list = self.env.heu_ems.get_ems_list() if self.show_ems else None
+        anchor_points = self._shown_anchor_points() if self.show_anchor else None
+        ems_list = self._shown_ems_list() if self.show_ems else None
         draw_left_plot(
             drawer,
             buffer=self.env.buffer,
@@ -211,7 +213,13 @@ class PackVisualizer:
             legend_lines.append("Staging:")
             for (dx, dy, dz), indices in sorted(holding_item_types.items()):
                 legend_lines.append(f"{dx}x{dy}x{dz}: {len(indices)} pcs")
+        selected_block = getattr(self.env, "visual_selected_block", None)
+        if selected_block is not None:
+            dx, dy, dz = selected_block.Dim.raw().tolist()
+            count = selected_block.consumed_count
+            legend_lines.append(f"Selected block: {dx}x{dy}x{dz} ({count} boxes)")
         legend_lines.append(f"Utilization: {utilization_rate:.1f}%")
+        legend_lines.append(self._ems_count_line())
         fig.add_annotation(
             text="<br>".join(legend_lines),
             xref="paper",
@@ -227,6 +235,32 @@ class PackVisualizer:
 
     def _holding_items(self) -> list[Item]:
         return list(self.env.container.holding_list)
+
+    def _ems_count_line(self) -> str:
+        total_count = len(self.env.heu_ems.get_all_ems())
+        shown_count = len(self._shown_ems_list()) if self.show_ems else 0
+        if self.show_ems:
+            return f"EMS: {total_count} total, {shown_count} shown"
+        return f"EMS: {total_count} total, hidden"
+
+    def _shown_ems_list(self):
+        if self.ems_mode == "policy":
+            return getattr(self.env, "ems_list", None) or []
+        return self.env.heu_ems.get_ems_list()
+
+    def _shown_anchor_points(self):
+        if self.ems_mode != "policy":
+            return self.env.heu_ems.get_anchor_points()
+
+        points = []
+        seen = set()
+        for ems in self._shown_ems_list():
+            key = (ems.FLB.Gx, ems.FLB.Gy, ems.FLB.Gz)
+            if key in seen:
+                continue
+            seen.add(key)
+            points.append(ems.FLB)
+        return points
 
     def _figure_title(self, buffer_count: int, holding_count: int) -> str:
         return f"{self.title} (Buffer: {buffer_count}, Staging: {holding_count})"

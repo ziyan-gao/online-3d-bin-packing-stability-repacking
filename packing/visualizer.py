@@ -5,11 +5,11 @@ from copy import deepcopy
 from packing_env.data_type.geometry import Orthogonal3D, Point3D
 from packing_env.data_type.item import Item
 from packing_env.gym_env import PackingEnv
-from packing_env.visualization import PackVisualizer
 
 from .interactive_replay import InteractiveReplayRecorder
 from .live_plot import LivePlotServer, make_live_server
 from .plans import PackOperation, RepackOperation, UnpackOperation
+from .three_scene import build_three_scene
 
 
 class Visualizer:
@@ -22,36 +22,142 @@ class Visualizer:
         self.live_server = live_server
         self.visual_z_max = args.visual_z_max
         self.delay_sec = args.visual_delay_sec
-        self._pack_visualizer: PackVisualizer | None = None
 
     @classmethod
     def from_args(cls, args) -> "Visualizer":
         live_server = make_live_server(args) if args.visualize else None
         return cls(args, live_server=live_server)
 
-    def build(self, env: PackingEnv, title: str, reset_history: bool = False):
-        if self._pack_visualizer is None:
-            self._pack_visualizer = PackVisualizer(
-                env,
-                title=title,
-                show_anchor=True,
-                show_ems=False,
-            )
-        self._pack_visualizer.env = env
-        self._pack_visualizer.title = title
-        if reset_history:
-            self._pack_visualizer.reset_history()
-        fig, _ = self._pack_visualizer.refresh()
-        self._set_visual_z_range(fig)
-        return fig
+    def build(
+        self,
+        env: PackingEnv,
+        title: str,
+        reset_history: bool = False,
+        *,
+        highlight_selected: bool = True,
+        selected_block=None,
+    ):
+        self._refresh_policy_ems_for_visualization(
+            env,
+            highlight_selected=highlight_selected,
+            selected_block=selected_block,
+        )
+        return build_three_scene(
+            env,
+            title,
+            show_ems=getattr(self.args, "show_ems", False),
+            ems_mode=getattr(self.args, "ems_visual_mode", "raw"),
+            visual_z_max=self.visual_z_max,
+        )
+
+    def _refresh_policy_ems_for_visualization(
+        self,
+        env: PackingEnv,
+        *,
+        highlight_selected: bool = True,
+        selected_block=None,
+    ) -> None:
+        show_policy_ems = getattr(self.args, "ems_visual_mode", "raw") == "policy"
+        if not env.buffer.has_items:
+            if show_policy_ems:
+                env.ems_list = []
+            env.visual_selected_block = None
+            env.visual_selected_block_indices = []
+            env.buffer.visual_highlight_indices = []
+            return
+
+        if env.use_simple_blocks:
+            previous_blocks = {
+                box_type: list(blocks)
+                for box_type, blocks in env.buffer.simple_blocks.items()
+            }
+            try:
+                if selected_block is None:
+                    env.select_largest_policy_block()
+                    if len(env.buffer.all_blocks) == 0:
+                        if show_policy_ems:
+                            env.ems_list = []
+                        env.visual_selected_block = None
+                        env.visual_selected_block_indices = []
+                        env.buffer.visual_highlight_indices = []
+                        return
+                    item = env.buffer.sample_blocks(deterministic=True)
+                else:
+                    item = selected_block
+                if item is None:
+                    if show_policy_ems:
+                        env.ems_list = []
+                    env.visual_selected_block = None
+                    env.visual_selected_block_indices = []
+                    env.buffer.visual_highlight_indices = []
+                    return
+                if show_policy_ems:
+                    env.ems_list = env._get_item_fit_ems_list([item])
+                indices = self._buffer_indices_for_block(env, item)
+                env.visual_selected_block = item if highlight_selected else None
+                env.visual_selected_block_indices = indices if highlight_selected else []
+                env.buffer.visual_highlight_indices = (
+                    env.visual_selected_block_indices if highlight_selected else []
+                )
+            finally:
+                env.buffer.simple_blocks = previous_blocks
+            return
+
+        item = selected_block if selected_block is not None else env.buffer.sample_item()
+        if show_policy_ems:
+            env.ems_list = env._get_item_fit_ems_list([item])
+        env.visual_selected_block = item if highlight_selected else None
+        env.visual_selected_block_indices = [0] if highlight_selected else []
+        env.buffer.visual_highlight_indices = env.visual_selected_block_indices
+
+    @staticmethod
+    def _buffer_indices_for_block(env: PackingEnv, block) -> list[int]:
+        indices = []
+        for index, buffered_dim in enumerate(env.buffer.buffer):
+            if buffered_dim == block.box:
+                indices.append(index)
+                if len(indices) == block.consumed_count:
+                    break
+        return indices
 
     def push(self, env: PackingEnv, title: str) -> None:
+        self.push_scene(env, title)
+
+    def push_scene(
+        self,
+        env: PackingEnv,
+        title: str,
+        *,
+        highlight_selected: bool = True,
+        selected_block=None,
+    ) -> None:
         if self.live_server is None:
             return
-        self.live_server.push(self.build(env, title))
+        self.live_server.push(
+            self.build(
+                env,
+                title,
+                highlight_selected=highlight_selected,
+                selected_block=selected_block,
+            )
+        )
         print(f"updated visual: {title}")
         if self.delay_sec > 0:
             time.sleep(self.delay_sec)
+
+    def push_buffer_selection(self, env: PackingEnv, title: str, selected_block) -> None:
+        self.push_scene(
+            env,
+            f"{title}: Buffer",
+            highlight_selected=False,
+            selected_block=selected_block,
+        )
+        self.push_scene(
+            env,
+            f"{title}: Selected Buffer",
+            highlight_selected=True,
+            selected_block=selected_block,
+        )
 
     def hold(self) -> None:
         if self.args.hold_visual and self.live_server is not None:
@@ -197,12 +303,6 @@ class Visualizer:
             snapshots.append((deepcopy(env), title))
         if push_live:
             self.push(env, title)
-
-    def _set_visual_z_range(self, fig) -> None:
-        fig.update_layout(
-            scene2=dict(zaxis=dict(range=[0, self.visual_z_max])),
-            scene3=dict(zaxis=dict(range=[0, self.visual_z_max])),
-        )
 
     @staticmethod
     def _selected_ems_for_env(env: PackingEnv, selected_ems):
