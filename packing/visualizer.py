@@ -65,6 +65,12 @@ class Visualizer:
         selected_indices: list[int] | None = None,
     ) -> None:
         show_policy_ems = getattr(self.args, "ems_visual_mode", "raw") == "policy"
+        if getattr(env, "policy_mode", "largest_block_baseline") == "cascaded_block_selector":
+            env.visual_selected_block = selected_block if highlight_selected else None
+            env.visual_selected_block_indices = list(selected_indices or [])
+            env.buffer.visual_highlight_indices = env.visual_selected_block_indices
+            return
+
         if not env.buffer.has_items:
             if show_policy_ems:
                 env.ems_list = []

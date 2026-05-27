@@ -21,6 +21,7 @@ from packing.train_utils import (
     make_training_callbacks,
     select_training_device,
 )
+from packing.visualizer import Visualizer
 import packing.test_utils as test_utils
 from packing.test_utils import (
     DEFAULT_TEST_CONFIG,
@@ -528,3 +529,36 @@ def test_cascaded_observation_masks_padded_ems_columns(monkeypatch):
     assert len(env.ems_list) == 1
     assert not obs["action_mask"][:, 1:].any()
     assert env.done
+
+
+def test_policy_ems_visualization_preserves_cascaded_ems_list(monkeypatch):
+    env = PackingEnv(
+        k_placement=8,
+        buffer_capacity=3,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    obs = env.get_next_observation()
+    action = int(np.flatnonzero(obs["action_mask"].reshape(-1))[0])
+    before_ems = list(env.ems_list)
+
+    def fail_baseline_refresh():
+        raise AssertionError("cascaded visualization must not refresh baseline EMS")
+
+    monkeypatch.setattr(env, "select_largest_policy_block", fail_baseline_refresh)
+    visualizer = Visualizer(
+        SimpleNamespace(
+            visual_z_max=610.0,
+            visual_delay_sec=0.0,
+            show_ems=True,
+            ems_visual_mode="policy",
+        )
+    )
+
+    visualizer.build(env, "cascaded policy EMS")
+
+    assert env.ems_list == before_ems
+    env.decode_cascaded_action(action)
