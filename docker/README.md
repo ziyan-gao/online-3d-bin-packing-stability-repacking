@@ -41,6 +41,16 @@ export IMAGE_TAG=v2026.05.27
 docker compose -f docker/docker-compose.yml build
 ```
 
+The default image installs PyTorch CUDA 12.8 wheels for RTX 50-series
+Blackwell GPUs such as the RTX 5090. To override the PyTorch wheel versions:
+
+```bash
+docker compose -f docker/docker-compose.yml build \
+  --build-arg PYTORCH_VERSION=2.8.0 \
+  --build-arg TORCHVISION_VERSION=0.23.0 \
+  --build-arg PYTORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+```
+
 You can override the pinned Tianshou revision at build time:
 
 ```bash
@@ -167,7 +177,7 @@ Quick GPU check:
 
 ```bash
 docker compose -f docker/docker-compose.yml --profile gpu run --rm train-gpu \
-  python -c "import torch; print('cuda:', torch.cuda.is_available(), 'count:', torch.cuda.device_count())"
+  python -c "import torch; print(torch.__version__, torch.version.cuda); print(torch.cuda.get_device_name(0)); print(torch.cuda.get_device_capability(0)); print(torch.cuda.get_arch_list())"
 ```
 
 ## Notes

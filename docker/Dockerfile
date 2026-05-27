@@ -22,11 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -c "import sqlite3; print('sqlite:', sqlite3.sqlite_version)"
 
 # Install CUDA-capable PyTorch wheels.
+# CUDA 12.8 wheels include Blackwell / sm_120 support for RTX 50-series GPUs.
 # On GPU hosts, `torch.cuda.is_available()` becomes true when running with
 # NVIDIA runtime (`--gpus all` / compose gpu profile).
+ARG PYTORCH_VERSION=2.8.0
+ARG TORCHVISION_VERSION=0.23.0
+ARG PYTORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
 RUN pip install --upgrade pip wheel "setuptools==80.9.0" \
-    && pip install --index-url https://download.pytorch.org/whl/cu121 \
-       torch==2.4.1 torchvision==0.19.1
+    && pip install --index-url "${PYTORCH_CUDA_INDEX}" \
+       "torch==${PYTORCH_VERSION}" "torchvision==${TORCHVISION_VERSION}"
 
 # Install ROS-free project dependencies
 COPY docker/requirements_docker.txt /tmp/requirements_docker.txt
