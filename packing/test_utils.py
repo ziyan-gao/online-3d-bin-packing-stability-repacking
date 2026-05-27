@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 from omegaconf import OmegaConf
 
 from packing_env.gym_env import PackingEnv
-from packing.agents import GreedyValidationAgent, PackingAgent
+from packing.agents import PackingAgent
 from packing.debug_utils import (
     print_execution_steps,
     print_mcts_stats,
@@ -25,8 +25,7 @@ DEFAULT_TEST_CONFIG = os.path.join(PROJECT_ROOT, "configs", "test_default.yaml")
 @dataclass(frozen=True)
 class TestConfig:
     ds_name: str = "random"
-    agent: str = "policy"
-    checkpoint: str | None = "train_outputs/random/policy_step.pth"
+    checkpoint: str | None = "outputs/train_outputs/random/policy_step.pth"
     device: str | None = None
     seed: int = 101
     num_sequences: int = 1
@@ -41,7 +40,7 @@ class TestConfig:
     stack_only: bool = False
     use_simple_blocks: bool = False
     visualize: bool = False
-    visual_dir: str = "_three_live/mcts"
+    visual_dir: str = "outputs/three_live/mcts"
     visual_z_max: float = 610.0
     visual_port: int = 8766
     visual_delay_sec: float = 0.5
@@ -74,14 +73,11 @@ def load_test_config(config_path: str = DEFAULT_TEST_CONFIG) -> TestConfig:
 
 
 def build_agent(config: TestConfig):
-    agent_name = config.agent
-    if agent_name == "policy":
-        if config.checkpoint is None:
-            raise ValueError("--checkpoint is required when --agent policy is used")
-        agent = PackingAgent(device=config.device, checkpoint_path=config.checkpoint)
-        print(f"loaded policy weights from {config.checkpoint} on {agent.device}")
-        return agent
-    return GreedyValidationAgent()
+    if config.checkpoint is None:
+        raise ValueError("checkpoint is required for policy validation")
+    agent = PackingAgent(device=config.device, checkpoint_path=config.checkpoint)
+    print(f"loaded policy weights from {config.checkpoint} on {agent.device}")
+    return agent
 
 
 def build_env(config: TestConfig, seed: int) -> PackingEnv:
@@ -119,13 +115,40 @@ def make_summary(
     }
 
 
-def record_pack_step(box, env: PackingEnv) -> tuple:
+def selected_buffer_indices(item, buffer_before) -> list[int]:
+    if getattr(item, "preserve_order", False):
+        return [0]
+    if not hasattr(item, "box"):
+        return [0]
+
+    indices = []
+    consume_count = int(getattr(item, "consumed_count", 1))
+    for index, dims in enumerate(buffer_before):
+        if tuple(map(int, dims)) == tuple(map(int, item.box.raw())):
+            indices.append(index)
+            if len(indices) == consume_count:
+                break
+    return indices
+
+
+def record_pack_step(box, item, buffer_before, env: PackingEnv) -> tuple:
     return (
         (int(box.FLB.x), int(box.FLB.y), int(box.FLB.z)),
         (int(box.Dim.dx), int(box.Dim.dy), int(box.Dim.dz)),
         bool(getattr(box, "rot", False)),
+        [tuple(map(int, dims)) for dims in buffer_before],
+        item,
+        selected_buffer_indices(item, buffer_before),
         env.buffer.dims(),
     )
+
+
+def contained_item_count(env: PackingEnv) -> int:
+    return sum(int(getattr(item, "source_item_count", 1)) for item in env.container.placed_items)
+
+
+def annotate_source_item_count(box, source_item) -> None:
+    box.source_item_count = int(getattr(source_item, "consumed_count", 1))
 
 
 def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, visualizer: Visualizer):
@@ -167,6 +190,8 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
 
         box, (item_idx, action_idx, _) = agent.predict(obs)
         item = candidate_items[item_idx]
+        annotate_source_item_count(box, item)
+        buffer_before = env.buffer.dims()
         pack_title = f"Pack Step {step + 1} - seed {seed}"
         if hasattr(visualizer, "push_buffer_selection"):
             visualizer.push_buffer_selection(env, pack_title, item)
@@ -174,11 +199,10 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
             visualizer.push(env, pack_title)
         env.pack(box, selected_ems=env.ems_list[action_idx % env.k_placement])
         env.buffer.update(item)
-        pack_history.append(record_pack_step(box, env))
+        pack_history.append(record_pack_step(box, item, buffer_before, env))
         env.validate_packing_state()
         print(
-            "{} step={}, utilization={:.4f}, placed={}".format(
-                config.agent,
+            "policy step={}, utilization={:.4f}, placed={}".format(
                 step,
                 env.container.utilization,
                 len(env.container.placed_items),

@@ -69,41 +69,6 @@ def _predict_from_outputs(
     return box, (item_idx, act_idx, predicted_value[item_idx])
 
 
-class GreedyValidationAgent:
-    """Small deterministic agent used to validate MCTS without model weights."""
-
-    def predict(self, obs, value_deterministic=True, logits_deterministic=True):
-        mask = np.asarray(obs["mask"], dtype=bool)
-        item_raw = np.asarray(obs["item_raw"], dtype=np.int32)
-        ems = np.asarray(obs["ems_unnorm"], dtype=np.int32)
-
-        placable_items = np.where(mask.reshape(mask.shape[0], -1).any(axis=1))[0]
-        if len(placable_items) == 0:
-            raise ValueError("No placable item is available in the observation mask.")
-
-        volumes = np.prod(item_raw[placable_items], axis=1)
-        item_idx = int(placable_items[np.argmax(volumes)])
-
-        rot_idx, placement_idx = np.argwhere(mask[item_idx])[0]
-        act_idx = int(placement_idx + rot_idx * mask.shape[2])
-        dims = item_raw[item_idx].copy()
-        if rot_idx:
-            dims = dims[[1, 0, 2]]
-        buffer_space = int(
-            np.asarray(
-                obs.get("buffer_space", np.zeros(len(item_raw), dtype=np.int32))
-            ).reshape(-1)[item_idx]
-        )
-
-        box = Item(
-            FLB=Point3D(*map(int, ems[item_idx, placement_idx, :3])),
-            Dim=Orthogonal3D(*map(int, dims)),
-            buffer_space=buffer_space,
-        )
-        predicted_value = float(np.prod(item_raw[item_idx]))
-        return box, (item_idx, act_idx, predicted_value)
-
-
 class PackingAgent:
     def __init__(
         self,

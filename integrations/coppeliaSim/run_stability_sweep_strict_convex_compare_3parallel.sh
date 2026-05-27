@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 PYTHON_BIN="${PYTHON_BIN:-/home/gao/anaconda3/envs/packing-toolkit/bin/python}"
 COPPELIASIM_DIR="${COPPELIASIM_DIR:-/home/gao/CoppeliaSim_Edu_V4_10_0_rev0_Ubuntu22_04}"

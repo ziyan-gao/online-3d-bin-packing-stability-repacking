@@ -11,14 +11,13 @@ from packing.test_utils import DEFAULT_TEST_CONFIG, TestConfig, load_test_config
 def parse_test_args() -> TestConfig:
     parser = argparse.ArgumentParser(description="Validate MCTS unpack/repack search.")
     parser.add_argument("--config", default=DEFAULT_TEST_CONFIG)
-    parser.add_argument("--agent", choices=("greedy", "policy"))
     parser.add_argument(
         "--checkpoint",
-        help="Policy checkpoint to load when --agent policy is used.",
+        help="Policy checkpoint to load.",
     )
     parser.add_argument(
         "--device",
-        help="Torch device for --agent policy. Defaults to cuda when available.",
+        help="Torch device for policy inference. Defaults to cuda when available.",
     )
     parser.add_argument("--seed", type=int)
     parser.add_argument("--num-sequences", type=int)
@@ -72,7 +71,6 @@ def parse_test_args() -> TestConfig:
 
     config = load_test_config(args.config)
     overrides = {
-        "agent": args.agent,
         "checkpoint": args.checkpoint,
         "device": args.device,
         "seed": args.seed,

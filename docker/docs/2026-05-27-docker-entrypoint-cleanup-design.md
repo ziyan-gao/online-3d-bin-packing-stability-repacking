@@ -6,7 +6,7 @@ Make Docker easy to understand and useful as a project entrypoint. Docker should
 
 ## Scope
 
-Keep one `Dockerfile` and one `docker-compose.yml`. Remove the separate demo compose file and the stale Portainer/experiment-service sprawl. Keep Docker focused on common workflows:
+Keep one Dockerfile and one Compose file. Remove the separate demo compose file and the stale Portainer/experiment-service sprawl. Keep Docker focused on common workflows:
 
 - `shell`: interactive development shell.
 - `test`: validation/test command.
@@ -20,7 +20,7 @@ The compose file will use shared anchors for common build, image, working direct
 
 ## Documentation
 
-`DOCKER.md` will explain why Docker exists, then show the smallest command set for build, shell, test, demo, notebook, and GPU training. It will not mention monitoring, Portainer, deleted demo configs, or old CJ experiment service variants.
+`docker/README.md` explains why Docker exists, then shows the smallest command set for build, shell, test, demo, notebook, and GPU training. It does not mention monitoring, Portainer, deleted demo configs, or old CJ experiment service variants.
 
 ## Out Of Scope
 

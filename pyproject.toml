@@ -48,8 +48,8 @@ python = ">=3.11,<3.12"
 tianshou = {git = "https://github.com/thu-ml/tianshou.git", rev = "935a85a09fed1466379e26378c11821c6a7c9954"}
 
 [build-system]
-requires = ["pdm-backend", "setuptools", "wheel", "Cython", "numpy"]
-build-backend = "pdm.backend"
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
 
 [project.optional-dependencies]
 integration = ["deepspeed", "rootutils", "autoroot", "sh"]
@@ -72,46 +72,6 @@ logging = [
     "wandb",
     "clearml",
     "tensorboard",
-]
-
-
-
-[tool.pdm]
-distribution = true
-
-[tool.pdm.build]
-run-setuptools = true
-
-[[tool.pdm.sources]]
-url = "https://pypi.org/simple"
-verify_ssl = true
-name = "pypi"
-
-
-[[tool.pdm.source]]
-include_packages = ["torch", "torchvision"]
-exclude_packages = ["*"]
-name = "torch"
-url = "https://download.pytorch.org/whl/cu121" # for torchvision compatibility
-verify_ssl = true
-
-
-[tool.pdm.dev-dependencies]
-lint = [
-    "ruff",
-]
-test = ["pytest"]
-doc = [
-    "pdoc",
-]
-type = [
-    "mypy",
-]
-notebook = ["jupyter", "jupyterlab", "ipykernel"]
-plot = [
-    "matplotlib",
-    "seaborn",
-    "vtk",
 ]
 
 [tool.mypy]
@@ -145,7 +105,6 @@ exclude = [
   ".svn",
   ".tox",
   ".vscode",
-  "__pypackages__",
   "_build",
   "buck-out",
   "build",

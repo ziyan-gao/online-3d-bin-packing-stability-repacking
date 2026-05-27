@@ -1,5 +1,4 @@
 ds_name: CJ
-agent: policy
 checkpoint: /home/gao/CJ_block_dockerize/outputs/model_cj/CJ/policy_step.pth
 device:
 seed: 101
@@ -10,12 +9,12 @@ use_mcts: false
 target_util: 1
 max_steps: 300
 container_size: [1200, 1000, 1350]
-buffer_space: 0
+buffer_space: 10
 remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 visualize: false
-visual_dir: _three_live/cj_policy
+visual_dir: outputs/three_live/cj_policy
 visual_z_max: 1400.0
 visual_port: 8766
 visual_delay_sec: 0.5

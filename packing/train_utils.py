@@ -42,7 +42,7 @@ class TrainConfig:
     episode_per_test: int = 128
     batch_size: int = 256
     learning_rate: float = 7e-5
-    output_root: str = os.path.join(PROJECT_ROOT, "train_outputs")
+    output_root: str = os.path.join(PROJECT_ROOT, "outputs", "train_outputs")
     output_name: str | None = None
     tb_log_dir: str | None = None
     resume_checkpoint: str | None = None

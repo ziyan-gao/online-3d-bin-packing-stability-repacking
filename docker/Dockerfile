@@ -29,7 +29,7 @@ RUN pip install --upgrade pip wheel "setuptools==80.9.0" \
        torch==2.4.1 torchvision==0.19.1
 
 # Install ROS-free project dependencies
-COPY requirements_docker.txt /tmp/requirements_docker.txt
+COPY docker/requirements_docker.txt /tmp/requirements_docker.txt
 RUN pip install -r /tmp/requirements_docker.txt
 
 # Install Tianshou from a pinned source revision for reproducibility

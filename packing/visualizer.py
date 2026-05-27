@@ -22,6 +22,7 @@ class Visualizer:
         self.live_server = live_server
         self.visual_z_max = args.visual_z_max
         self.delay_sec = args.visual_delay_sec
+        self.last_selected_count = 0
 
     @classmethod
     def from_args(cls, args) -> "Visualizer":
@@ -36,12 +37,17 @@ class Visualizer:
         *,
         highlight_selected: bool = True,
         selected_block=None,
+        selected_indices: list[int] | None = None,
     ):
         self._refresh_policy_ems_for_visualization(
             env,
             highlight_selected=highlight_selected,
             selected_block=selected_block,
+            selected_indices=selected_indices,
         )
+        if highlight_selected and selected_block is not None:
+            self.last_selected_count = int(getattr(selected_block, "consumed_count", 1))
+        env.visual_selected_count = self.last_selected_count
         return build_three_scene(
             env,
             title,
@@ -56,6 +62,7 @@ class Visualizer:
         *,
         highlight_selected: bool = True,
         selected_block=None,
+        selected_indices: list[int] | None = None,
     ) -> None:
         show_policy_ems = getattr(self.args, "ems_visual_mode", "raw") == "policy"
         if not env.buffer.has_items:
@@ -93,7 +100,11 @@ class Visualizer:
                     return
                 if show_policy_ems:
                     env.ems_list = env._get_item_fit_ems_list([item])
-                indices = self._buffer_indices_for_block(env, item)
+                indices = (
+                    list(selected_indices)
+                    if selected_indices is not None
+                    else self._buffer_indices_for_block(env, item)
+                )
                 env.visual_selected_block = item if highlight_selected else None
                 env.visual_selected_block_indices = indices if highlight_selected else []
                 env.buffer.visual_highlight_indices = (
@@ -107,7 +118,9 @@ class Visualizer:
         if show_policy_ems:
             env.ems_list = env._get_item_fit_ems_list([item])
         env.visual_selected_block = item if highlight_selected else None
-        env.visual_selected_block_indices = [0] if highlight_selected else []
+        env.visual_selected_block_indices = (
+            list(selected_indices) if selected_indices is not None else [0]
+        ) if highlight_selected else []
         env.buffer.visual_highlight_indices = env.visual_selected_block_indices
 
     @staticmethod
@@ -233,8 +246,19 @@ class Visualizer:
             out_path=replay_path,
             interval_ms=self.args.replay_interval_ms,
         )
-        for idx, (env, title, *_) in enumerate(snapshots):
-            recorder.capture(title, self.build(env, title, reset_history=idx == 0))
+        for idx, (env, title, *metadata) in enumerate(snapshots):
+            options = metadata[0] if metadata and isinstance(metadata[0], dict) else {}
+            recorder.capture(
+                title,
+                self.build(
+                    env,
+                    title,
+                    reset_history=idx == 0,
+                    highlight_selected=bool(options.get("highlight_selected", False)),
+                    selected_block=options.get("selected_block"),
+                    selected_indices=options.get("selected_indices"),
+                ),
+            )
         recorder.save()
 
     def save_sequence_replay(
@@ -255,28 +279,75 @@ class Visualizer:
             container_size=tuple(self.args.container_size),
             item_buffer_space=getattr(self.args, "buffer_space", 0),
             remove_inscribed_ems=getattr(self.args, "remove_inscribed_ems", False),
+            stack_only=getattr(self.args, "stack_only", False),
+            use_simple_blocks=getattr(self.args, "use_simple_blocks", False),
         )
         replay_env.reset(seed=seed)
         replay_env.buffer.buffer = [Orthogonal3D(*dims) for dims in initial_buffer]
         if not start_from_blocked:
-            snapshots.append((deepcopy(replay_env), f"Initial State - seed {seed}"))
+            snapshots.append((
+                deepcopy(replay_env),
+                f"Initial State - seed {seed}",
+                {"highlight_selected": False},
+            ))
 
-        for step, (box_pos, box_dims, box_rot, buffer_after) in enumerate(pack_history, start=1):
+        for step, pack_step in enumerate(pack_history, start=1):
+            if len(pack_step) == 7:
+                (
+                    box_pos,
+                    box_dims,
+                    box_rot,
+                    buffer_before,
+                    selected_block,
+                    selected_indices,
+                    buffer_after,
+                ) = pack_step
+            elif len(pack_step) == 6:
+                box_pos, box_dims, box_rot, buffer_before, selected_block, buffer_after = pack_step
+                selected_indices = None
+            else:
+                box_pos, box_dims, box_rot, buffer_after = pack_step
+                buffer_before = None
+                selected_block = None
+                selected_indices = None
             box = Item(
                 FLB=Point3D(*box_pos),
                 Dim=Orthogonal3D(*box_dims),
                 buffer_space=getattr(self.args, "buffer_space", 0),
             )
             box.rot = box_rot
+            if selected_block is not None:
+                box.source_item_count = int(getattr(selected_block, "consumed_count", 1))
+            if not start_from_blocked and buffer_before is not None:
+                replay_env.buffer.buffer = [Orthogonal3D(*dims) for dims in buffer_before]
+                snapshots.append((
+                    deepcopy(replay_env),
+                    f"Pack Step {step}: Buffer - seed {seed}",
+                    {"highlight_selected": False},
+                ))
+                snapshots.append((
+                    deepcopy(replay_env),
+                    f"Pack Step {step}: Selected Buffer - seed {seed}",
+                    {
+                        "highlight_selected": selected_block is not None,
+                        "selected_block": selected_block,
+                        "selected_indices": selected_indices,
+                    },
+                ))
             replay_env.pack(box)
             replay_env.buffer.buffer = [Orthogonal3D(*dims) for dims in buffer_after]
-            if not start_from_blocked:
-                snapshots.append((deepcopy(replay_env), f"Pack Step {step} - seed {seed}"))
+            if not start_from_blocked and buffer_before is None:
+                snapshots.append((
+                    deepcopy(replay_env),
+                    f"Pack Step {step}: Packed - seed {seed}",
+                    {"highlight_selected": False},
+                ))
 
         snapshots.append(
             (
                 deepcopy(replay_env),
                 f"Blocked Before MCTS at Pack Step {len(pack_history)} - seed {seed}",
+                {"highlight_selected": False},
             )
         )
 
@@ -300,7 +371,7 @@ class Visualizer:
         push_live: bool,
     ) -> None:
         if snapshots is not None:
-            snapshots.append((deepcopy(env), title))
+            snapshots.append((deepcopy(env), title, {"highlight_selected": False}))
         if push_live:
             self.push(env, title)
 

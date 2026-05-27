@@ -7,8 +7,12 @@ set -euo pipefail
 # Run this script on the HOST machine (not inside the dev container).
 #
 # Usage:
-#   sudo bash install_nvidia_container_toolkit.sh
-#   sudo bash install_nvidia_container_toolkit.sh --compose-up
+#   sudo bash docker/setup_nvidia_docker_and_compose.sh
+#   sudo bash docker/setup_nvidia_docker_and_compose.sh --gpu-check
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Please run as root (example: sudo bash $0)"
@@ -20,12 +24,15 @@ if ! command -v apt-get >/dev/null 2>&1; then
   exit 1
 fi
 
-COMPOSE_UP=false
-if [[ "${1:-}" == "--compose-up" ]]; then
-  COMPOSE_UP=true
+GPU_CHECK=false
+if [[ "${1:-}" == "--gpu-check" ]]; then
+  GPU_CHECK=true
+elif [[ "${1:-}" == "--compose-up" ]]; then
+  echo "--compose-up is deprecated; use --gpu-check instead."
+  GPU_CHECK=true
 elif [[ -n "${1:-}" ]]; then
   echo "Unknown argument: $1"
-  echo "Usage: sudo bash $0 [--compose-up]"
+  echo "Usage: sudo bash $0 [--gpu-check]"
   exit 1
 fi
 
@@ -61,23 +68,25 @@ echo "Install/config complete."
 echo "Run this test command:"
 echo "docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi"
 
-if [[ "${COMPOSE_UP}" == "true" ]]; then
+if [[ "${GPU_CHECK}" == "true" ]]; then
   echo
-  echo "Requested: docker compose up -d"
+  echo "Requested: docker compose GPU check"
 
   if ! command -v docker >/dev/null 2>&1; then
-    echo "Docker CLI not found; skipping compose up."
+    echo "Docker CLI not found; skipping GPU check."
     exit 0
   fi
 
-  if [[ ! -f "docker-compose.yml" && ! -f "compose.yml" && ! -f "compose.yaml" ]]; then
-    echo "No compose file found in current directory; skipping compose up."
+  if [[ ! -f "${COMPOSE_FILE}" ]]; then
+    echo "No docker-compose.yml found at ${COMPOSE_FILE}; skipping GPU check."
     exit 0
   fi
 
   if [[ -n "${SUDO_USER:-}" ]]; then
-    sudo -u "${SUDO_USER}" docker compose up -d
+    sudo -u "${SUDO_USER}" docker compose -f "${COMPOSE_FILE}" --project-directory "${REPO_ROOT}" --profile gpu run --rm train-gpu \
+      python -c "import torch; print('cuda:', torch.cuda.is_available(), 'count:', torch.cuda.device_count())"
   else
-    docker compose up -d
+    docker compose -f "${COMPOSE_FILE}" --project-directory "${REPO_ROOT}" --profile gpu run --rm train-gpu \
+      python -c "import torch; print('cuda:', torch.cuda.is_available(), 'count:', torch.cuda.device_count())"
   fi
 fi

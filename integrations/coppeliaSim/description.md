@@ -4,7 +4,7 @@ This folder reproduces the strict convex-hull CoppeliaSim experiment. Results
 are written inside this folder in directories named like:
 
 ```text
-coppeliaSim_simulation/experiment_results_strict_convex_compare_<RUN_ID>/
+integrations/coppeliaSim/experiment_results_strict_convex_compare_<RUN_ID>/
 ```
 
 ## Files
@@ -42,7 +42,7 @@ runs the strict sweep for Bullet 2.83, ODE, and Newton.
 The experiment imports baselines from:
 
 ```text
-../packing_env/stable_heuristics_baselines/
+../../packing_env/stable_heuristics_baselines/
 ```
 
 Available heuristic names:
@@ -67,7 +67,7 @@ Run the full strict sweep from the project root:
 
 ```bash
 cd /home/gao/online-3d-bin-packing-stability-repacking
-./coppeliaSim_simulation/run_stability_sweep_strict_convex_compare_3parallel.sh
+./integrations/coppeliaSim/run_stability_sweep_strict_convex_compare_3parallel.sh
 ```
 
 Quick smoke run:
@@ -75,7 +75,7 @@ Quick smoke run:
 ```bash
 cd /home/gao/online-3d-bin-packing-stability-repacking
 EPOCHS=1 MAX_ITEMS=20 SAVE_EVERY=1 \
-./coppeliaSim_simulation/run_stability_sweep_strict_convex_compare_3parallel.sh
+./integrations/coppeliaSim/run_stability_sweep_strict_convex_compare_3parallel.sh
 ```
 
 ## Shell Variables
@@ -142,7 +142,7 @@ Strict stability settings:
 Each run creates:
 
 ```text
-coppeliaSim_simulation/experiment_results_strict_convex_compare_<RUN_ID>/
+integrations/coppeliaSim/experiment_results_strict_convex_compare_<RUN_ID>/
   results/
     results_<RUN_ID>_<engine>_bin<z>_<same|variable>.csv
   summaries/
@@ -159,7 +159,7 @@ Start CoppeliaSim separately on a port, then run:
 ```bash
 cd /home/gao/online-3d-bin-packing-stability-repacking
 /home/gao/anaconda3/envs/packing-toolkit/bin/python \
-  coppeliaSim_simulation/stability_experiment.py \
+  integrations/coppeliaSim/stability_experiment.py \
   --epochs 5 \
   --max-items 100 \
   --bin-z 1.8 \

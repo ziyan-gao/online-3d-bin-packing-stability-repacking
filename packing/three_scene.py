@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 from packing_env.data_type.item import Item
@@ -165,18 +164,21 @@ def _color_to_hex(color) -> str:
 
 
 def _legend(env, buffer_items: list, holding_items: list, selected_block, shown_ems_count: int, show_ems: bool) -> list[str]:
-    lines = ["Item Types:"]
-    for dims, count in sorted(Counter(_dims(item) for item in buffer_items).items()):
-        lines.append(f"{dims[0]}x{dims[1]}x{dims[2]}: {count} pcs")
+    lines = ["Items:"]
     if holding_items:
-        lines.append("Staging:")
-        for dims, count in sorted(Counter(_dims(item) for item in holding_items).items()):
-            lines.append(f"{dims[0]}x{dims[1]}x{dims[2]}: {count} pcs")
-    if selected_block is not None:
-        dx, dy, dz = _dims(selected_block)
-        count = getattr(selected_block, "consumed_count", 1)
-        lines.append(f"Selected block: {dx}x{dy}x{dz} ({count} boxes)")
+        lines.append(f"Staging: {len(holding_items)} items")
+    selected_count = (
+        int(getattr(selected_block, "consumed_count", 0))
+        if selected_block is not None
+        else int(getattr(env, "visual_selected_count", 0))
+    )
+    lines.append(f"Selected: {selected_count} items")
+    lines.append(f"In container: {_contained_item_count(env)} items")
     lines.append(f"Utilization: {env.container.utilization * 100:.1f}%")
     total_ems = len(env.heu_ems.get_all_ems())
     lines.append(f"EMS: {total_ems} total, {shown_ems_count if show_ems else 0} shown")
     return lines
+
+
+def _contained_item_count(env) -> int:
+    return sum(int(getattr(item, "source_item_count", 1)) for item in env.container.placed_items)

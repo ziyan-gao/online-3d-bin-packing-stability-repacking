@@ -5,7 +5,6 @@ from packing_env.data_type.ems import EmptyMaximalSpace
 from packing_env.data_type.geometry import Orthogonal3D, Point3D
 from packing_env.data_type.item import Item, SimpleBlock
 from packing_env.gym_env import PackingEnv
-from packing.agents import GreedyValidationAgent
 from packing import test_utils
 
 
@@ -173,7 +172,37 @@ class ShapeCheckingAgent:
 
     def predict(self, obs, value_deterministic=True, logits_deterministic=True):
         self.observed_item_count = len(obs["item_raw"])
-        return GreedyValidationAgent().predict(obs, value_deterministic, logits_deterministic)
+        return DeterministicPlacementAgent().predict(obs, value_deterministic, logits_deterministic)
+
+
+class DeterministicPlacementAgent:
+    def predict(self, obs, value_deterministic=True, logits_deterministic=True):
+        mask = np.asarray(obs["mask"], dtype=bool)
+        item_raw = np.asarray(obs["item_raw"], dtype=np.int32)
+        ems = np.asarray(obs["ems_unnorm"], dtype=np.int32)
+
+        placable_items = np.where(mask.reshape(mask.shape[0], -1).any(axis=1))[0]
+        if len(placable_items) == 0:
+            raise ValueError("No placable item is available in the observation mask.")
+
+        item_idx = int(placable_items[0])
+        rot_idx, placement_idx = np.argwhere(mask[item_idx])[0]
+        act_idx = int(placement_idx + rot_idx * mask.shape[2])
+        dims = item_raw[item_idx].copy()
+        if rot_idx:
+            dims = dims[[1, 0, 2]]
+        buffer_space = int(
+            np.asarray(
+                obs.get("buffer_space", np.zeros(len(item_raw), dtype=np.int32))
+            ).reshape(-1)[item_idx]
+        )
+
+        box = Item(
+            FLB=Point3D(*map(int, ems[item_idx, placement_idx, :3])),
+            Dim=Orthogonal3D(*map(int, dims)),
+            buffer_space=buffer_space,
+        )
+        return box, (item_idx, act_idx, float(np.prod(item_raw[item_idx])))
 
 
 def test_pack_until_blocked_uses_largest_usable_simple_block():
@@ -192,7 +221,6 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
         container_size=(600, 600, 600),
     )
     config = test_utils.TestConfig(
-        agent="greedy",
         max_steps=1,
         target_util=0.001,
         stack_only=True,
@@ -213,6 +241,7 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
     assert agent.observed_item_count == 1
     assert len(env.container.placed_items) == 1
     assert env.container.placed_items[0].Dim.raw().tolist() == [100, 100, 150]
+    assert test_utils.contained_item_count(env) == 3
     assert len(env.buffer.buffer) == env.buffer.capacity
 
 
@@ -232,7 +261,6 @@ def test_pack_until_blocked_handles_no_usable_simple_blocks():
         container_size=(600, 600, 600),
     )
     config = test_utils.TestConfig(
-        agent="greedy",
         max_steps=1,
         stack_only=True,
         use_simple_blocks=True,
@@ -241,7 +269,7 @@ def test_pack_until_blocked_handles_no_usable_simple_blocks():
     blocked_item, pack_history, reached = test_utils.pack_until_blocked(
         config,
         env,
-        GreedyValidationAgent(),
+        DeterministicPlacementAgent(),
         seed=101,
         visualizer=NoopVisualizer(),
     )

@@ -38,4 +38,4 @@ stable/placeable, transparent red previews are rejected. Use the `Support`
 button to show or hide the bearable support patches recorded by the stability
 checker.
 
-Implementation files live in `../interactive_simulator_app/`.
+Implementation files live in `../../interactive_simulator_app/`.

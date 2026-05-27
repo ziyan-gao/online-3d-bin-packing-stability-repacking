@@ -4,7 +4,7 @@
 
 **Goal:** Replace scattered Docker workflows with one clear compose entrypoint and matching docs.
 
-**Architecture:** Keep the existing `Dockerfile` as the image definition. Rewrite `docker-compose.yml` around shared anchors and five user-facing services. Delete `docker-compose.demo.yml` and rewrite `DOCKER.md` to match the new command surface.
+**Architecture:** Keep the existing Dockerfile as the image definition. Rewrite the Compose file around shared anchors and five user-facing services. Delete the separate demo compose file and document the command surface in `docker/README.md`.
 
 **Tech Stack:** Docker, Docker Compose, Markdown.
 
@@ -13,19 +13,19 @@
 ### Task 1: Compose File
 
 **Files:**
-- Modify: `docker-compose.yml`
+- Modify: `docker/docker-compose.yml`
 - Delete: `docker-compose.demo.yml`
 
-- [ ] Replace `docker-compose.yml` with shared `x-app-common`, CPU services `shell`, `test`, `demo`, `notebook`, and GPU service `train-gpu`.
+- [ ] Replace the Compose file with shared `x-app-common`, CPU services `shell`, `test`, `demo`, `notebook`, and GPU service `train-gpu`.
 - [ ] Remove Portainer and CJ experiment service variants.
 - [ ] Delete `docker-compose.demo.yml`.
 
 ### Task 2: Docker Documentation
 
 **Files:**
-- Modify: `DOCKER.md`
+- Modify: `docker/README.md`
 
-- [ ] Rewrite `DOCKER.md` around why Docker exists and the five compose services.
+- [ ] Rewrite `docker/README.md` around why Docker exists and the five compose services.
 - [ ] Remove stale references to `app`, `app-gpu`, `docker-compose.demo.yml`, monitoring, Portainer, and deleted demo configs.
 
 ### Task 3: Verification
@@ -33,5 +33,5 @@
 **Files:**
 - No source changes.
 
-- [ ] Run `docker compose config`.
+- [ ] Run `docker compose -f docker/docker-compose.yml config`.
 - [ ] Run `git status --short`.

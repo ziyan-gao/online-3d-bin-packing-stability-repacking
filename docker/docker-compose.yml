@@ -1,11 +1,14 @@
+name: cj-block
+
 x-app-common: &app-common
   build:
-    context: .
-    dockerfile: Dockerfile
+    context: ..
+    dockerfile: docker/Dockerfile
   image: cj-block:${IMAGE_TAG:-latest}
   working_dir: /app
   volumes:
-    - ./:/app
+    - ../:/app
+    - ${CJ_POLICY_CHECKPOINT_DIR:-/home/gao/CJ_block_dockerize/outputs/model_cj/CJ}:/home/gao/CJ_block_dockerize/outputs/model_cj/CJ:ro
   environment:
     MPLCONFIGDIR: /tmp/matplotlib
     XDG_CACHE_HOME: /tmp
@@ -36,11 +39,19 @@ services:
     ports:
       - "${LIVE_PLOT_HOST_PORT_DEMO:-8767}:8765"
     command: >
-      bash -lc "mkdir -p _three_live/demo &&
-      python test.py --config configs/test_default.yaml
-      --use-mcts=false
-      --save-replay=true
-      --replay-path _three_live/demo"
+      bash -lc "mkdir -p outputs/three_live/demo &&
+      python test.py --config configs/test_cj_default.yaml
+      --no-use-mcts
+      --save-replay
+      --replay-path outputs/three_live/demo"
+
+  replay:
+    <<: *app-common
+    container_name: cj-block-replay
+    ports:
+      - "${REPLAY_HOST_PORT:-8090}:8080"
+    command: >
+      python -m http.server 8080 --bind 0.0.0.0
 
   notebook:
     <<: *app-common
@@ -57,7 +68,7 @@ services:
       --allow-root
       --ServerApp.token=''
       --ServerApp.password=''
-      --ServerApp.default_url=/lab/tree/tutorials/packing_demo.ipynb"
+      --ServerApp.default_url=/lab/tree/examples/tutorials/packing_demo.ipynb"
 
   train-gpu:
     <<: *app-common

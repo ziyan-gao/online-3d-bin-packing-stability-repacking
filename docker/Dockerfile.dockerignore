@@ -23,8 +23,9 @@ venv/
 log/
 logs/
 outputs/
-train_outputs/
-_plotly_live/
+outputs/train_outputs/
+outputs/plotly_live/
+outputs/three_live/
 *.pth
 *.pt
 *.pkl
@@ -39,6 +40,5 @@ _plotly_live/
 *.mp4
 
 # Build cache
-.pdm-build/
 dist/
 build/

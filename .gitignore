@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.pdm-build/
 
 # OS/editor
 .DS_Store
@@ -16,19 +15,27 @@ __pycache__/
 # Generated experiment artifacts
 logs/
 log/
-outputs/
-train_outputs/
-!train_outputs/
-train_outputs/*
-!train_outputs/random/
-!train_outputs/random/checkpoint.pth
-!train_outputs/random/policy_step.pth
-!train_outputs/random/data_distribution.json
-_plotly_live/
+outputs/*
+!outputs/train_outputs/
+outputs/train_outputs/*
+!outputs/train_outputs/random/
+!outputs/train_outputs/random/checkpoint.pth
+!outputs/train_outputs/random/policy_step.pth
+!outputs/train_outputs/random/data_distribution.json
+!outputs/plotly_live/
+outputs/plotly_live/*
+!outputs/plotly_live/notebook_demo/
+!outputs/plotly_live/notebook_demo/**
+!outputs/three_live/
+outputs/three_live/*
+!outputs/three_live/cj_policy/
+!outputs/three_live/cj_policy/**
+!outputs/three_live/demo/
+!outputs/three_live/demo/**
 buffer_support_live.html
 ems_debug_frame.html
 *.csv
 *.gif
-!figures/*.gif
+!examples/figures/*.gif
 *.pth
-!train_outputs/random/*.pth
+!outputs/train_outputs/random/*.pth

@@ -27,7 +27,7 @@ visual artifacts.
 
 ### System Overview
 
-![Proposed method](figures/Proposed_method.png)
+![Proposed method](examples/figures/Proposed_method.png)
 
 - The system starts from online item arrivals and a fixed pallet/container.
 - Candidate placements are generated from EMS-based free-space geometry.
@@ -41,7 +41,7 @@ visual artifacts.
 
 ### Interactive Stability Simulator
 
-![Interactive stability simulator](figures/interactive_simulator.gif)
+![Interactive stability simulator](examples/figures/interactive_simulator.gif)
 
 - The simulator provides a hands-on interface for testing placement candidates
   before running a full policy or MCTS sequence.
@@ -50,7 +50,7 @@ visual artifacts.
 - Grid and anchor previews make stable placements visually inspectable, while
   rejected placements expose where feasibility or support constraints fail.
 - The static simulator preview is also available at
-  `figures/interactive_simulator.png`.
+  `examples/figures/interactive_simulator.png`.
 
 ### Stability-Ensured Packing Policy
 
@@ -61,12 +61,12 @@ visual artifacts.
 - Open the hosted replay:
   [stability-ensured packing policy](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/packing_steps.html).
 - The same replay is also included locally at
-  `_plotly_live/notebook_demo/packing_steps.html`.
+  `outputs/plotly_live/notebook_demo/packing_steps.html`.
 
 ### MCTS And Safe Repacking
 
 - MCTS is triggered when the incoming item cannot be packed directly by the
-  policy or greedy placement process.
+  policy placement process.
 - The planner searches over unpack, repack, and final pack operations on the
   current container state.
 - Each searched operation is replayed through the same environment constraints,
@@ -74,7 +74,7 @@ visual artifacts.
 - Open the hosted replay:
   [raw MCTS repacking](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/mcts_replay.html).
 - The same replay is also included locally at
-  `_plotly_live/notebook_demo/mcts_replay.html`.
+  `outputs/plotly_live/notebook_demo/mcts_replay.html`.
 
 ### Optimized Repacking Sequence
 
@@ -83,29 +83,29 @@ visual artifacts.
 - Open the hosted replay:
   [optimized repacking sequence](https://ziyan-gao.github.io/online-3d-bin-packing-stability-repacking/replays/mcts_optimized_replay.html).
 - The same replay is also included locally at
-  `_plotly_live/notebook_demo/mcts_optimized_replay.html`.
+  `outputs/plotly_live/notebook_demo/mcts_optimized_replay.html`.
 - Real-platform demonstrations show the stability validation and policy-driven
   repacking behavior on hardware:
-  `figures/random_stable_loading_acc.gif` and
-  `figures/policy_rearrangement_demo.gif`.
+  `examples/figures/random_stable_loading_acc.gif` and
+  `examples/figures/policy_rearrangement_demo.gif`.
 
 ## Real-Platform Demonstrations
 
 **Random stable loading validation**
 
-![Random stable loading validation](figures/random_stable_loading_acc.gif)
+![Random stable loading validation](examples/figures/random_stable_loading_acc.gif)
 
 Three random stable loading sequences on the real platform, used to support the
 proposed structural stability validation method.
 
 **Policy packing with safe repacking**
 
-![Policy packing with safe repacking](figures/policy_rearrangement_demo.gif)
+![Policy packing with safe repacking](examples/figures/policy_rearrangement_demo.gif)
 
 Robot palletizing procedure showing packing, unpacking, and repacking on the
 pallet using the trained policy and repacking planner.
 
-The GIFs are stored in `figures/` so the demonstrations render directly in the
+The GIFs are stored in `examples/figures/` so the demonstrations render directly in the
 README.
 
 ## Installation
@@ -136,14 +136,14 @@ than the regular Python packages.
 Open the proposed-framework notebook walkthrough:
 
 ```bash
-jupyter lab tutorials/packing_demo.ipynb
+jupyter lab examples/tutorials/packing_demo.ipynb
 ```
 
 Run the clearance tutorial, which shows how `buffer_space` changes virtual
 occupied dimensions used for feasibility and collision checks:
 
 ```bash
-jupyter lab tutorials/clearance_demo.ipynb
+jupyter lab examples/tutorials/clearance_demo.ipynb
 ```
 
 Start the manual interactive simulator:
@@ -174,14 +174,17 @@ python train.py --config configs/train_default.yaml
 
 - `packing_env/`: Gymnasium environment, EMS generation, height/feasibility
   maps, stability validation, core data types, and environment visualization.
-- `packing/`: greedy and checkpoint-backed agents, policy loading, MCTS
+- `packing/`: checkpoint-backed policy agent, policy loading, MCTS
   rearrangement search, execution-plan optimization, and replay utilities.
 - `train.py` and `test.py`: script entry points for training and validation.
-- `tutorials/`: notebook walkthroughs and simulator notes.
+- `examples/tutorials/`: notebook walkthroughs and simulator notes.
+- `examples/figures/`: README and tutorial images/GIFs.
+- `outputs/`: checkpoints, generated replays, and live visualization artifacts.
+- `integrations/`: external simulator integrations, currently CoppeliaSim.
 - `interactive_simulator_app/`: browser-based manual packing simulator.
 - `configs/`: default train/test configuration files.
-- `Dockerfile`, `docker-compose.yml`, and `DOCKER.md`: containerized
-  workflows.
+- `docker/`: containerized workflows, including Compose services, the image
+  definition, Docker-specific requirements, and GPU setup helper.
 
 ## Validation And Testing
 
@@ -194,22 +197,11 @@ Run the validation sequence:
 python test.py --config configs/test_default.yaml
 ```
 
-Run a custom greedy validation sequence:
-
-```bash
-python test.py \
-  --agent greedy \
-  --ds-name CJ_uniform \
-  --container-size 600 600 600 \
-  --buffer-space 10
-```
-
 Run with a policy checkpoint:
 
 ```bash
 python test.py \
-  --agent policy \
-  --checkpoint train_outputs/random/policy_step.pth \
+  --checkpoint outputs/train_outputs/random/policy_step.pth \
   --container-size 600 600 600 \
   --buffer-space 10
 ```
@@ -218,21 +210,20 @@ Enable live visualization:
 
 ```bash
 python test.py \
-  --agent greedy \
-  --ds-name CJ_uniform \
+  --checkpoint outputs/train_outputs/random/policy_step.pth \
   --container-size 600 600 600 \
   --buffer-space 10 \
   --visualize
 ```
 
 The live visualization URL is printed by the script. Interactive replay files
-are written under `_plotly_live/` when `--save-replay` is enabled.
+are written under `outputs/plotly_live/` when `--save-replay` is enabled.
 
 ## Training
 
 This public release includes a pretrained demo checkpoint under
-`train_outputs/random/`. The default policy examples use
-`train_outputs/random/policy_step.pth` when available.
+`outputs/train_outputs/random/`. The default policy examples use
+`outputs/train_outputs/random/policy_step.pth` when available.
 
 Run the default training configuration:
 
@@ -240,7 +231,7 @@ Run the default training configuration:
 python train.py --config configs/train_default.yaml
 ```
 
-Training outputs are written under `train_outputs/` by default.
+Training outputs are written under `outputs/train_outputs/` by default.
 
 ## Buffered Packing Clearance
 
@@ -262,14 +253,14 @@ support reasoning.
 
 ## Visualization And Tutorials
 
-![Interactive simulator](figures/interactive_simulator.png)
+![Interactive simulator](examples/figures/interactive_simulator.png)
 
-- `tutorials/packing_demo.ipynb`: proposed-framework walkthrough with policy
+- `examples/tutorials/packing_demo.ipynb`: proposed-framework walkthrough with policy
   packing, MCTS rearrangement, optimized operation sequence, and interactive
   replays.
-- `tutorials/clearance_demo.ipynb`: focused walkthrough of `buffer_space`, true
+- `examples/tutorials/clearance_demo.ipynb`: focused walkthrough of `buffer_space`, true
   dimensions, virtual dimensions, and replayed packing sequences.
-- `tutorials/interactive_simulator_demo.ipynb`: launches the manual simulator
+- `examples/tutorials/interactive_simulator_demo.ipynb`: launches the manual simulator
   in Jupyter and explains grid candidates plus stability validation.
 - `python -m interactive_simulator_app`: starts the standalone browser
   simulator.
@@ -281,8 +272,7 @@ simulator uses a Three.js main container view with a Plotly buffer panel.
 ## Common CLI Options
 
 ```text
---agent {greedy,policy}        Choose validation agent.
---checkpoint PATH              Policy checkpoint for --agent policy.
+--checkpoint PATH              Policy checkpoint.
 --ds-name NAME                 Dataset or built-in item distribution.
 --container-size DX DY DZ      Container dimensions in millimeters.
 --buffer-space B               Extra x/y clearance in millimeters.
@@ -306,40 +296,48 @@ python train.py --help
 Build the image:
 
 ```bash
-docker compose build
+docker compose -f docker/docker-compose.yml build
 ```
 
 Start a CPU shell:
 
 ```bash
-docker compose run --rm shell
+docker compose -f docker/docker-compose.yml run --rm shell
 ```
 
 Run validation:
 
 ```bash
-docker compose run --rm test
+docker compose -f docker/docker-compose.yml run --rm test
 ```
 
 Generate a demo replay:
 
 ```bash
-docker compose run --rm demo
+docker compose -f docker/docker-compose.yml run --rm demo
 ```
+
+Serve generated replay files:
+
+```bash
+docker compose -f docker/docker-compose.yml up replay
+```
+
+Then open replay HTML files under `http://127.0.0.1:8090/`.
 
 Start the tutorial notebook:
 
 ```bash
-docker compose up notebook
+docker compose -f docker/docker-compose.yml up notebook
 ```
 
 Run GPU training:
 
 ```bash
-docker compose --profile gpu up train-gpu
+docker compose -f docker/docker-compose.yml --profile gpu up train-gpu
 ```
 
-More Docker notes are in `DOCKER.md`.
+More Docker notes are in `docker/README.md`.
 
 ## License
 
@@ -348,9 +346,10 @@ details.
 
 ## Development Notes
 
-This project uses Python 3.11. The `pyproject.toml` and `pdm.lock` files describe
-the Python package dependencies. The Docker image installs the runtime
-dependencies from `requirements_docker.txt`.
+This project uses Python 3.11. The local environment is created with
+`environment.yml`, then Poetry reads `pyproject.toml` to install the pinned
+Tianshou dependency. The Docker image installs the runtime dependencies from
+`docker/requirements_docker.txt`.
 
 Before committing changes, a lightweight syntax check is:
 
