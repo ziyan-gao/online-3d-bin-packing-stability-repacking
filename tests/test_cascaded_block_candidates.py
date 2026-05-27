@@ -70,13 +70,13 @@ def test_cascaded_candidates_expose_only_stable_oriented_blocks():
         use_simple_blocks=True,
         policy_mode="cascaded_block_selector",
     )
+    env.reset(seed=1)
     env.buffer = Buffer(
         capacity=2,
         data_sampler=FakeSampler([box, box, box]),
         stack_only=True,
         container_size=(600, 600, 600),
     )
-    env.reset(seed=1)
 
     candidates, ems_list, loading_mask = env.get_cascaded_block_candidates()
 
