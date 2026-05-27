@@ -113,6 +113,10 @@ def test_train_cj_default_enables_block_baseline_defaults():
     assert config.use_simple_blocks
     assert config.policy_mode == "largest_block_baseline"
     assert config.output_name == "baseline-blocks"
+    assert config.train_env_num == 16
+    assert config.test_env_num == 8
+    assert config.step_per_collect == 1000
+    assert config.episode_per_test == 16
 
 
 def test_test_config_accepts_default_policy_mode():

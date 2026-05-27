@@ -8,13 +8,13 @@ remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 policy_mode: largest_block_baseline
-train_env_num: 64
-test_env_num: 32
+train_env_num: 16
+test_env_num: 8
 train_env_seed: 5
 max_epoch: 1000
 step_per_epoch: 32000
-step_per_collect: 4000
-episode_per_test: 128
+step_per_collect: 1000
+episode_per_test: 16
 batch_size: 256
 learning_rate: 0.00007
 output_root: outputs/train_outputs
