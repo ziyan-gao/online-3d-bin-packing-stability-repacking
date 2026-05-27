@@ -84,3 +84,65 @@ def test_cascaded_candidates_expose_only_stable_oriented_blocks():
     assert loading_mask.shape == (len(candidates), env.k_placement)
     assert loading_mask.any(axis=1).all()
     assert all(candidate.consumed_count in (1, 2) for candidate in candidates)
+
+
+def test_cascaded_observation_contains_blocks_and_loading_mask():
+    box = Orthogonal3D(300, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    env.buffer = Buffer(
+        capacity=2,
+        data_sampler=FakeSampler([box, box, box]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+
+    obs = env.get_next_observation()
+
+    assert obs["oriented_blocks"].shape == (env.max_oriented_blocks, 8)
+    assert obs["block_mask"].shape == (env.max_oriented_blocks,)
+    assert obs["ems"].shape == (env.k_placement, 6)
+    assert obs["loading_mask"].shape == (env.max_oriented_blocks, env.k_placement)
+    assert obs["action_mask"].shape == (env.max_oriented_blocks, env.k_placement)
+    assert obs["block_mask"].any()
+
+    valid_rows = obs["block_mask"].astype(bool)
+    assert obs["loading_mask"][valid_rows].any(axis=1).all()
+    assert np.array_equal(obs["action_mask"], obs["loading_mask"])
+
+
+def test_cascaded_action_decoding_applies_orientation_once():
+    box = Orthogonal3D(300, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    env.buffer = Buffer(
+        capacity=2,
+        data_sampler=FakeSampler([box, box, box]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    obs = env.get_next_observation()
+    oriented_index, ems_index = np.argwhere(obs["action_mask"])[0]
+    assert obs["action_mask"][oriented_index, ems_index]
+
+    flat_action = int(oriented_index * env.k_placement + ems_index)
+    _, reward, _, _, _ = env.step(flat_action)
+
+    assert reward > 0
+    assert len(env.container.placed_items) == 1
+    placed = env.container.placed_items[0]
+    np.testing.assert_array_equal(placed.Dim.raw(), env.last_placed_source.Dim.raw())

@@ -78,11 +78,40 @@ class PackingEnv(gym.Env):
             container_size=container_size,
             buffer_space=self.item_buffer_space,
         )
+        self.max_oriented_blocks = 2 * self.buffer.capacity
         self._render_visualizer = None
         self._set_space()
 
 
     def _set_space(self) -> None:
+        if self.policy_mode == "cascaded_block_selector":
+            self.action_space = spaces.Discrete(self.max_oriented_blocks * self.k_placement)
+            self.observation_space = spaces.Dict(
+                {
+                    "oriented_blocks": spaces.Box(
+                        low=0,
+                        high=1,
+                        shape=(self.max_oriented_blocks, 8),
+                        dtype=np.float32,
+                    ),
+                    "block_mask": spaces.MultiBinary(self.max_oriented_blocks),
+                    "ems": spaces.Box(
+                        low=0,
+                        high=1,
+                        shape=(self.k_placement, 6),
+                        dtype=np.float32,
+                    ),
+                    "loading_mask": spaces.MultiBinary(
+                        (self.max_oriented_blocks, self.k_placement)
+                    ),
+                    "action_mask": spaces.MultiBinary(
+                        (self.max_oriented_blocks, self.k_placement)
+                    ),
+                    "placable": spaces.Discrete(2),
+                }
+            )
+            return
+
         self.action_space = spaces.Discrete(2 * self.k_placement)
         self.observation_space = spaces.Dict(
             {
@@ -576,8 +605,56 @@ class PackingEnv(gym.Env):
         data["placable"] = bool(mask.any())
         return data
 
+    def get_cascaded_observation(self) -> dict:
+        oriented_candidates, ems_list, loading_rows = self.get_cascaded_block_candidates()
+        self.oriented_block_candidates = oriented_candidates
+        self.ems_list = ems_list
+
+        vectorized_ems = self.get_vectorized_ems(ems_list=ems_list)
+        normalized_ems = vectorized_ems.copy().astype(np.float32)
+        normalized_ems[:, :3] = normalized_ems[:, :3] / self.bin_size
+        normalized_ems[:, 3:] = normalized_ems[:, 3:] / self.bin_size
+        self.candidates = vectorized_ems.copy()
+
+        oriented_blocks = np.zeros((self.max_oriented_blocks, 8), dtype=np.float32)
+        block_mask = np.zeros((self.max_oriented_blocks,), dtype=bool)
+        loading_mask = np.zeros(
+            (self.max_oriented_blocks, self.k_placement),
+            dtype=bool,
+        )
+
+        visible_count = min(len(oriented_candidates), self.max_oriented_blocks)
+        for idx, oriented in enumerate(oriented_candidates[:visible_count]):
+            oriented_blocks[idx] = oriented.feature_row(
+                container_size=(
+                    self.container.dx,
+                    self.container.dy,
+                    self.container.dz,
+                )
+            )
+            block_mask[idx] = True
+        if visible_count > 0:
+            loading_mask[:visible_count] = loading_rows[:visible_count]
+
+        action_mask = loading_mask.copy()
+        placable = bool(action_mask.any())
+        self.done = not placable
+        self.current_obs = {
+            "oriented_blocks": oriented_blocks,
+            "block_mask": block_mask,
+            "ems": normalized_ems.astype(np.float32),
+            "loading_mask": loading_mask,
+            "action_mask": action_mask,
+            "placable": placable,
+        }
+        self.selected_item = None
+        return self.current_obs
+
 
     def get_next_observation(self):
+        if self.policy_mode == "cascaded_block_selector":
+            return self.get_cascaded_observation()
+
         if self.use_simple_blocks:
             self.select_largest_policy_block()
         else:
@@ -719,6 +796,49 @@ class PackingEnv(gym.Env):
         selected_ems = self.ems_list[idx]
         return pos, rot, selected_ems
 
+    def decode_cascaded_action(self, action: int) -> tuple[int, int, OrientedBlock, EmptyMaximalSpace]:
+        action = int(action)
+        if action < 0 or action >= self.max_oriented_blocks * self.k_placement:
+            raise ValueError(f"cascaded action out of range: {action}")
+        if not hasattr(self, "current_obs"):
+            raise ValueError("cascaded action requires a current observation")
+
+        oriented_index, ems_index = divmod(action, self.k_placement)
+        action_mask = np.asarray(self.current_obs["action_mask"], dtype=bool)
+        if oriented_index >= action_mask.shape[0] or ems_index >= action_mask.shape[1]:
+            raise ValueError(f"cascaded action out of mask range: {action}")
+        if not bool(action_mask[oriented_index, ems_index]):
+            raise ValueError(
+                f"cascaded action selects invalid block/EMS pair: "
+                f"block={oriented_index}, ems={ems_index}"
+            )
+        if oriented_index >= len(self.oriented_block_candidates):
+            raise ValueError(f"cascaded block index unavailable: {oriented_index}")
+        if ems_index >= len(self.ems_list):
+            raise ValueError(f"cascaded EMS index unavailable: {ems_index}")
+
+        oriented = self.oriented_block_candidates[oriented_index]
+        selected_ems = self.ems_list[ems_index]
+        return oriented_index, ems_index, oriented, selected_ems
+
+    def step_cascaded(self, action: int) -> tuple:
+        _, _, oriented, selected_ems = self.decode_cascaded_action(action)
+        placed_item = oriented.to_item(selected_ems.FLB)
+
+        self.last_placed_source = oriented
+        self.img_counter += 1
+        self._step(oriented.block, placed_item, selected_ems)
+
+        reward = placed_item.Dim.Volume / self.container.Volume
+        obs_next = self.get_next_observation()
+        done = self.done
+        info = {
+            "packed_objects": len(self.container.placed_items),
+            "utilization_ratio": self.container.utilization,
+            "selected_stack_height": oriented.block.no_boxes_wrt_axis[2],
+        }
+        return obs_next, reward, done, False, info
+
     def step(self, action: int) -> tuple:
         """Execute one step of the environment.
         
@@ -730,6 +850,9 @@ class PackingEnv(gym.Env):
         Returns:
             Tuple of (next_obs, reward, done, truncated, info)
         """
+        if self.policy_mode == "cascaded_block_selector":
+            return self.step_cascaded(action)
+
         selected_block = self.selected_item
         
         # Decode action to position and rotation
