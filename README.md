@@ -189,7 +189,8 @@ python train.py --config configs/train_default.yaml
 ## Validation And Testing
 
 Default train/test settings live in `configs/train_default.yaml` and
-`configs/test_default.yaml`.
+`configs/test_default.yaml`. Docker block-policy comparison training uses
+`configs/train_cj_default.yaml`.
 
 Run the validation sequence:
 

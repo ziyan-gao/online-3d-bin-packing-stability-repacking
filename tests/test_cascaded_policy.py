@@ -14,7 +14,9 @@ from model.cascaded_policy import CascadedCategoricalMasked
 from packing.agents import PackingAgent
 from packing.policy_loader import build_net, load_checkpoint_state_dict
 from packing.train_utils import (
+    PROJECT_ROOT,
     TrainConfig,
+    load_train_config,
     load_training_checkpoint,
     make_training_callbacks,
     select_training_device,
@@ -94,6 +96,15 @@ def test_train_config_accepts_cascaded_policy_mode():
 def test_train_config_rejects_unknown_policy_mode():
     with pytest.raises(ValueError, match="policy_mode"):
         TrainConfig(policy_mode="not_a_policy")
+
+
+def test_train_cj_default_enables_block_baseline_defaults():
+    config = load_train_config(str(Path(PROJECT_ROOT) / "configs/train_cj_default.yaml"))
+
+    assert config.stack_only
+    assert config.use_simple_blocks
+    assert config.policy_mode == "largest_block_baseline"
+    assert config.output_name == "baseline-blocks"
 
 
 def test_test_config_accepts_default_policy_mode():

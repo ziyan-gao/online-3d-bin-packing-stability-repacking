@@ -70,6 +70,7 @@ From there, run normal project commands such as:
 ```bash
 python test.py --config configs/test_default.yaml
 python train.py --config configs/train_default.yaml
+python train.py --config configs/train_cj_default.yaml
 ```
 
 ## Validation
@@ -165,9 +166,9 @@ This writes checkpoints under:
 outputs/train_outputs/cascaded-block-selector/
 ```
 
-Both services use vertical SimpleBlock candidates with the same buffer settings
-from `configs/train_default.yaml`. The baseline service keeps the largest usable
-block policy, while the cascaded service trains the new block selector policy.
+Both services read shared vertical SimpleBlock defaults from
+`configs/train_cj_default.yaml`. The baseline service uses the config directly,
+while the cascaded service overrides only the policy mode and output name.
 
 TensorBoard is exposed at `http://localhost:16006` for baseline training and
 `http://localhost:16007` for cascaded training. The older `train-gpu` service is

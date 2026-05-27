@@ -90,11 +90,7 @@ services:
     command: >
       bash -lc "mkdir -p /app/log/tensorboard;
       tensorboard --logdir /app/log/tensorboard --host 0.0.0.0 --port 6006 &
-      python train.py --config configs/train_default.yaml
-      --output-name baseline-blocks
-      --stack-only
-      --use-simple-blocks
-      --policy-mode largest_block_baseline"
+      python train.py --config configs/train_cj_default.yaml"
     deploy:
       resources:
         reservations:
@@ -123,10 +119,8 @@ services:
     command: >
       bash -lc "mkdir -p /app/log/tensorboard;
       tensorboard --logdir /app/log/tensorboard --host 0.0.0.0 --port 6006 &
-      python train.py --config configs/train_default.yaml
+      python train.py --config configs/train_cj_default.yaml
       --output-name cascaded-block-selector
-      --stack-only
-      --use-simple-blocks
       --policy-mode cascaded_block_selector"
     deploy:
       resources:
