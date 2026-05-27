@@ -75,9 +75,14 @@ class PackingAgent:
         device: str | None = None,
         k_placement: int = 80,
         checkpoint_path: str | None = None,
+        policy_mode: str = "largest_block_baseline",
     ):
         self.device = resolve_runtime_device(device)
-        self.actor, self.critic = build_net(device=str(self.device))
+        self.policy_mode = policy_mode
+        self.actor, self.critic = build_net(
+            device=str(self.device),
+            policy_mode=policy_mode,
+        )
         self.k_placement = k_placement
         if checkpoint_path is not None:
             load_policy_weights(self.actor, self.critic, checkpoint_path, self.device)
@@ -91,6 +96,12 @@ class PackingAgent:
         value_deterministic=True,
         logits_deterministic=True,
     ):
+        if self.policy_mode == "cascaded_block_selector":
+            return self.predict_cascaded(
+                obs,
+                logits_deterministic=logits_deterministic,
+            )
+
         data = SimpleNamespace(
             new_item=obs["item"],
             ems=obs["ems"],
@@ -109,6 +120,36 @@ class PackingAgent:
             value_deterministic=value_deterministic,
             logits_deterministic=logits_deterministic,
         )
+
+    def predict_cascaded(self, obs, logits_deterministic=True):
+        data = SimpleNamespace(
+            oriented_blocks=obs["oriented_blocks"],
+            ems=obs["ems"],
+            block_mask=obs["block_mask"],
+            loading_mask=obs["loading_mask"],
+            action_mask=obs["action_mask"],
+        )
+        with torch.no_grad():
+            act_out, _ = self.actor(data)
+            _ = self.critic(data).detach().cpu().numpy().reshape(-1)
+
+        mask = torch.as_tensor(
+            act_out.action_mask,
+            dtype=torch.bool,
+            device=self.device,
+        )
+        logits = act_out.logits.clone()
+        flat_mask = mask.reshape(logits.shape[0], -1)
+        logits = logits.masked_fill(~flat_mask, -torch.inf)
+        if logits_deterministic:
+            action = int(logits.argmax(dim=-1)[0].detach().cpu().item())
+        else:
+            from model.cascaded_policy import CascadedCategoricalMasked
+
+            action = int(
+                CascadedCategoricalMasked(act_out).sample()[0].detach().cpu().item()
+            )
+        return action
 
     def idx2pos(self, idx, candidates):
         return _idx2pos(idx, candidates, self.k_placement)

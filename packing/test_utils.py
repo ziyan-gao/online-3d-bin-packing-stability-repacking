@@ -155,6 +155,46 @@ def annotate_source_item_count(box, source_item) -> None:
 def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, visualizer: Visualizer):
     pack_history = []
     for step in range(config.max_steps):
+        if getattr(config, "policy_mode", "largest_block_baseline") == "cascaded_block_selector":
+            obs = env.get_next_observation()
+            if not obs["placable"]:
+                print(
+                    "blocked at step={}, utilization={:.4f}, placed={}, unpackable={}".format(
+                        step,
+                        env.container.utilization,
+                        len(env.container.placed_items),
+                        len(env.container.unpackable_boxes),
+                    )
+                )
+                blocked_title = f"Blocked Before MCTS at Pack Step {step} - seed {seed}"
+                visualizer.push(env, blocked_title)
+                return None, pack_history, False
+
+            action = agent.predict(obs)
+            _, _, selected_block, selected_ems = env.decode_cascaded_action(action)
+            buffer_before = env.buffer.dims()
+            pack_title = f"Pack Step {step + 1} - seed {seed}"
+            visualizer.push(env, pack_title)
+            box = selected_block.to_item(selected_ems.FLB)
+            annotate_source_item_count(box, selected_block.block)
+            env.step(action)
+            pack_history.append(
+                record_pack_step(box, selected_block.block, buffer_before, env)
+            )
+            env.validate_packing_state()
+            print(
+                "policy step={}, utilization={:.4f}, placed={}".format(
+                    step,
+                    env.container.utilization,
+                    len(env.container.placed_items),
+                )
+            )
+
+            if env.container.utilization >= config.target_util:
+                print("target utilization reached before MCTS was needed")
+                return None, pack_history, True
+            continue
+
         if config.use_simple_blocks:
             env.select_largest_policy_block()
             if env.buffer.all_blocks:

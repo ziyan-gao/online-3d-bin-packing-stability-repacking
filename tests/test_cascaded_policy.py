@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 
@@ -13,6 +14,24 @@ from model.cascaded_policy import CascadedCategoricalMasked
 from packing.policy_loader import build_net
 from packing.train_utils import TrainConfig, load_training_checkpoint
 from packing.test_utils import DEFAULT_TEST_CONFIG, load_test_config
+from packing_env.data_type.buffer import Buffer
+from packing_env.data_type.geometry import Orthogonal3D
+from packing_env.gym_env import PackingEnv
+
+
+class LocalFakeSampler:
+    is_random_distribution = False
+
+    def __init__(self, items):
+        self.items = list(items)
+        self.cursor = 0
+
+    def sample(self, n):
+        sampled = []
+        for _ in range(n):
+            sampled.append(self.items[self.cursor % len(self.items)])
+            self.cursor += 1
+        return sampled
 
 
 def make_cascaded_obs():
@@ -168,3 +187,29 @@ def test_build_net_returns_cascaded_models_for_cascaded_policy_mode():
 
     assert isinstance(actor, CascadedActor)
     assert isinstance(critic, CascadedCritic)
+
+
+def test_cascaded_env_step_can_use_flat_policy_action():
+    box = Orthogonal3D(100, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=3,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    env.buffer = Buffer(
+        capacity=3,
+        data_sampler=LocalFakeSampler([box, box, box]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    obs = env.get_next_observation()
+    action = int(np.flatnonzero(obs["action_mask"].reshape(-1))[0])
+
+    _, reward, _, _, info = env.step(action)
+
+    assert reward > 0
+    assert info["selected_stack_height"] >= 1
