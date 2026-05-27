@@ -1,8 +1,8 @@
-data_name: random
+data_name: CJ
 buffer_size: 12
-container_dx: 600
-container_dy: 600
-container_dz: 600
+container_dx: 1200
+container_dy: 1000
+container_dz: 1350
 k_placement: 80
 remove_inscribed_ems: false
 stack_only: true

@@ -103,6 +103,12 @@ def test_train_config_rejects_unknown_policy_mode():
 def test_train_cj_default_enables_block_baseline_defaults():
     config = load_train_config(str(Path(PROJECT_ROOT) / "configs/train_cj_default.yaml"))
 
+    assert config.data_name == "CJ"
+    assert (config.container_dx, config.container_dy, config.container_dz) == (
+        1200,
+        1000,
+        1350,
+    )
     assert config.stack_only
     assert config.use_simple_blocks
     assert config.policy_mode == "largest_block_baseline"
