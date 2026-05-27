@@ -142,6 +142,19 @@ def test_test_cj_default_uses_baseline_block_checkpoint():
     assert config.use_mcts is False
 
 
+def test_test_cj_cascade_uses_cascaded_checkpoint():
+    config = load_test_config(str(Path(TEST_PROJECT_ROOT) / "configs/test_cj_cascade.yaml"))
+
+    assert config.checkpoint == (
+        "outputs/train_outputs/cascaded-block-selector/policy_step.pth"
+    )
+    assert config.ds_name == "CJ"
+    assert config.stack_only
+    assert config.use_simple_blocks
+    assert config.policy_mode == "cascaded_block_selector"
+    assert config.use_mcts is False
+
+
 def test_accumulate_step_reward_prints_step_and_total(capsys):
     reward_total = accumulate_step_reward(
         reward_total=0.25,
