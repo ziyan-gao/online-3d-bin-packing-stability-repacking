@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
 from packing_env.data_type.data_sampler import DataSampler
+from packing.policy_loader import resolve_runtime_device
 
 if TYPE_CHECKING:
     from tianshou.policy import PPOPolicy
@@ -179,7 +180,7 @@ def make_single_env(config: TrainConfig):
 
 
 def select_training_device() -> str:
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    return str(resolve_runtime_device())
 
 
 def container_size(config: TrainConfig) -> tuple[int, int, int]:

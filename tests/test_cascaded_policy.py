@@ -17,6 +17,7 @@ from packing.train_utils import (
     TrainConfig,
     load_training_checkpoint,
     make_training_callbacks,
+    select_training_device,
 )
 import packing.test_utils as test_utils
 from packing.test_utils import (
@@ -206,6 +207,15 @@ def test_best_policy_checkpoint_carries_policy_metadata(tmp_path):
     assert checkpoint["policy_mode"] == "cascaded_block_selector"
     assert checkpoint["container_size"] == (600, 600, 600)
     assert checkpoint["buffer_size"] == 12
+
+
+def test_select_training_device_uses_runtime_compatibility_guard(monkeypatch):
+    monkeypatch.setattr(
+        "packing.train_utils.resolve_runtime_device",
+        lambda requested_device=None: torch.device("cpu"),
+    )
+
+    assert select_training_device() == "cpu"
 
 
 def test_cascaded_actor_outputs_flat_logits_and_masks():
