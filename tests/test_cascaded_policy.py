@@ -11,8 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from model.cascaded_actor import CascadedActor
 from model.cascaded_critic import CascadedCritic
 from model.cascaded_policy import CascadedCategoricalMasked
-from packing.policy_loader import build_net
-from packing.train_utils import TrainConfig, load_training_checkpoint
+from packing.agents import PackingAgent
+from packing.policy_loader import build_net, load_checkpoint_state_dict
+from packing.train_utils import (
+    TrainConfig,
+    load_training_checkpoint,
+    make_training_callbacks,
+)
 import packing.test_utils as test_utils
 from packing.test_utils import (
     DEFAULT_TEST_CONFIG,
@@ -145,6 +150,62 @@ def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):
             config,
             "cpu",
         )
+
+
+def test_policy_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):
+    checkpoint_path = tmp_path / "policy_step.pth"
+    torch.save(
+        {
+            "model": {},
+            "policy_mode": "largest_block_baseline",
+        },
+        checkpoint_path,
+    )
+
+    with pytest.raises(ValueError, match="policy_mode"):
+        load_checkpoint_state_dict(
+            str(checkpoint_path),
+            "cpu",
+            expected_metadata={"policy_mode": "cascaded_block_selector"},
+        )
+
+
+def test_best_policy_checkpoint_carries_policy_metadata(tmp_path):
+    class DummyPolicy:
+        def state_dict(self):
+            return {
+                "actor.weight": torch.tensor([1.0]),
+                "critic.weight": torch.tensor([2.0]),
+            }
+
+    config = TrainConfig(
+        data_name="random",
+        container_dx=600,
+        container_dy=600,
+        container_dz=600,
+        buffer_size=12,
+        k_placement=80,
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    _, save_best_fn, _ = make_training_callbacks(
+        config,
+        str(tmp_path),
+        optimizer=None,
+    )
+
+    save_best_fn(DummyPolicy())
+
+    checkpoint = torch.load(
+        tmp_path / "policy_step.pth",
+        map_location="cpu",
+        weights_only=False,
+    )
+    assert checkpoint["model"]["actor.weight"].item() == 1.0
+    assert checkpoint["policy_mode"] == "cascaded_block_selector"
+    assert checkpoint["container_size"] == (600, 600, 600)
+    assert checkpoint["buffer_size"] == 12
 
 
 def test_cascaded_actor_outputs_flat_logits_and_masks():
@@ -289,3 +350,33 @@ def test_cascaded_env_step_can_use_flat_policy_action():
 
     assert reward > 0
     assert info["selected_stack_height"] >= 1
+
+
+def test_cascaded_agent_predict_accepts_unbatched_env_observation():
+    box = Orthogonal3D(100, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=3,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    env.buffer = Buffer(
+        capacity=3,
+        data_sampler=LocalFakeSampler([box, box, box]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    obs = env.get_next_observation()
+    agent = PackingAgent(
+        device="cpu",
+        k_placement=4,
+        policy_mode="cascaded_block_selector",
+    )
+
+    action = agent.predict(obs)
+
+    assert isinstance(action, int)
+    assert obs["action_mask"].reshape(-1)[action]

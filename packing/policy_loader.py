@@ -10,6 +10,13 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
 
 
+CHECKPOINT_METADATA_DEFAULTS = {
+    "stack_only": False,
+    "use_simple_blocks": False,
+    "policy_mode": "largest_block_baseline",
+}
+
+
 class CategoricalMasked(torch.distributions.Categorical):
     def __init__(self, actor_output):
         self.device = actor_output.logits.device
@@ -104,14 +111,44 @@ def extract_prefixed_state_dict(state_dict: dict, prefix: str) -> dict:
     return extracted
 
 
-def load_checkpoint_state_dict(checkpoint_path: str, device):
+def validate_checkpoint_metadata(checkpoint: dict, expected_metadata: dict | None) -> None:
+    if not expected_metadata:
+        return
+
+    mismatches = {
+        key: (checkpoint.get(key, CHECKPOINT_METADATA_DEFAULTS.get(key)), value)
+        for key, value in expected_metadata.items()
+        if (
+            key in checkpoint
+            or key in CHECKPOINT_METADATA_DEFAULTS
+        )
+        and checkpoint.get(key, CHECKPOINT_METADATA_DEFAULTS.get(key)) != value
+    }
+    if not mismatches:
+        return
+
+    details = ", ".join(
+        f"{key}: checkpoint={ckpt_value!r}, expected={expected_value!r}"
+        for key, (ckpt_value, expected_value) in mismatches.items()
+    )
+    raise ValueError(
+        f"Policy checkpoint configuration does not match requested policy ({details})."
+    )
+
+
+def load_checkpoint_state_dict(
+    checkpoint_path: str,
+    device,
+    expected_metadata: dict | None = None,
+):
     try:
-        state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     except TypeError:
-        state_dict = torch.load(checkpoint_path, map_location=device)
-    if isinstance(state_dict, dict) and "model" in state_dict:
-        state_dict = state_dict["model"]
-    return state_dict
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+    if isinstance(checkpoint, dict) and "model" in checkpoint:
+        validate_checkpoint_metadata(checkpoint, expected_metadata)
+        return checkpoint["model"]
+    return checkpoint
 
 
 def build_net(device: str = "cuda", policy_mode: str = "largest_block_baseline"):
@@ -153,12 +190,28 @@ def build_policy(
 ):
     runtime_device = resolve_runtime_device(device)
     actor, critic = build_net(device=str(runtime_device), policy_mode=policy_mode)
-    load_policy_weights(actor, critic, checkpoint_path, runtime_device)
+    load_policy_weights(
+        actor,
+        critic,
+        checkpoint_path,
+        runtime_device,
+        expected_metadata={"policy_mode": policy_mode},
+    )
     return actor, critic
 
 
-def load_policy_weights(actor, critic, checkpoint_path: str, device) -> None:
-    state_dict = load_checkpoint_state_dict(checkpoint_path, device)
+def load_policy_weights(
+    actor,
+    critic,
+    checkpoint_path: str,
+    device,
+    expected_metadata: dict | None = None,
+) -> None:
+    state_dict = load_checkpoint_state_dict(
+        checkpoint_path,
+        device,
+        expected_metadata=expected_metadata,
+    )
     actor.load_state_dict(extract_prefixed_state_dict(state_dict, "actor."))
     critic.load_state_dict(extract_prefixed_state_dict(state_dict, "critic."))
     actor.eval()

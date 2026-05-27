@@ -186,6 +186,19 @@ def container_size(config: TrainConfig) -> tuple[int, int, int]:
     return (config.container_dx, config.container_dy, config.container_dz)
 
 
+def training_checkpoint_metadata(config: TrainConfig) -> dict:
+    return {
+        "data_name": config.data_name,
+        "container_size": container_size(config),
+        "buffer_size": config.buffer_size,
+        "k_placement": config.k_placement,
+        "remove_inscribed_ems": config.remove_inscribed_ems,
+        "stack_only": config.stack_only,
+        "use_simple_blocks": config.use_simple_blocks,
+        "policy_mode": config.policy_mode,
+    }
+
+
 def build_training_policy(config: TrainConfig, env, device: str):
     from tianshou.policy import PPOPolicy
     from tianshou.utils.net.common import ActorCritic
@@ -274,16 +287,7 @@ def load_training_checkpoint(
             f"Checkpoint {checkpoint_path!r} is missing required keys: {sorted(missing_keys)}"
         )
 
-    expected = {
-        "data_name": config.data_name,
-        "container_size": (config.container_dx, config.container_dy, config.container_dz),
-        "buffer_size": config.buffer_size,
-        "k_placement": config.k_placement,
-        "remove_inscribed_ems": config.remove_inscribed_ems,
-        "stack_only": config.stack_only,
-        "use_simple_blocks": config.use_simple_blocks,
-        "policy_mode": config.policy_mode,
-    }
+    expected = training_checkpoint_metadata(config)
     checkpoint_defaults = {
         "stack_only": False,
         "use_simple_blocks": False,
@@ -341,13 +345,19 @@ def make_training_callbacks(
     save_dir: str,
     optimizer: torch.optim.Optimizer,
 ):
-    size = container_size(config)
+    metadata = training_checkpoint_metadata(config)
 
     def train_fn(epoch, env_step):
         pass
 
     def save_best_fn(policy):
-        torch.save(policy.state_dict(), os.path.join(save_dir, "policy_step.pth"))
+        torch.save(
+            {
+                "model": policy.state_dict(),
+                **metadata,
+            },
+            os.path.join(save_dir, "policy_step.pth"),
+        )
 
     def save_checkpoint_fn(epoch, env_step, gradient_step):
         ckpt_path = os.path.join(save_dir, "checkpoint.pth")
@@ -355,14 +365,7 @@ def make_training_callbacks(
             {
                 "model": policy.state_dict(),
                 "optim": optimizer.state_dict(),
-                "data_name": config.data_name,
-                "container_size": size,
-                "buffer_size": config.buffer_size,
-                "k_placement": config.k_placement,
-                "remove_inscribed_ems": config.remove_inscribed_ems,
-                "stack_only": config.stack_only,
-                "use_simple_blocks": config.use_simple_blocks,
-                "policy_mode": config.policy_mode,
+                **metadata,
                 "epoch": epoch,
                 "env_step": env_step,
                 "gradient_step": gradient_step,

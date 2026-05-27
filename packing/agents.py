@@ -24,6 +24,16 @@ def _idx2pos(idx, candidates, k_placement: int):
     return pos, rot
 
 
+def _batch_cascaded_value(value, unbatched_ndim: int, dtype=None):
+    if torch.is_tensor(value):
+        return value.unsqueeze(0) if value.ndim == unbatched_ndim else value
+
+    array = np.asarray(value, dtype=dtype)
+    if array.ndim == unbatched_ndim:
+        return array[np.newaxis, ...]
+    return array
+
+
 def _predict_from_outputs(
     act_out,
     predicted_value: np.ndarray,
@@ -85,7 +95,13 @@ class PackingAgent:
         )
         self.k_placement = k_placement
         if checkpoint_path is not None:
-            load_policy_weights(self.actor, self.critic, checkpoint_path, self.device)
+            load_policy_weights(
+                self.actor,
+                self.critic,
+                checkpoint_path,
+                self.device,
+                expected_metadata={"policy_mode": self.policy_mode},
+            )
         else:
             self.actor.eval()
             self.critic.eval()
@@ -123,11 +139,31 @@ class PackingAgent:
 
     def predict_cascaded(self, obs, logits_deterministic=True):
         data = SimpleNamespace(
-            oriented_blocks=obs["oriented_blocks"],
-            ems=obs["ems"],
-            block_mask=obs["block_mask"],
-            loading_mask=obs["loading_mask"],
-            action_mask=obs["action_mask"],
+            oriented_blocks=_batch_cascaded_value(
+                obs["oriented_blocks"],
+                unbatched_ndim=2,
+                dtype=np.float32,
+            ),
+            ems=_batch_cascaded_value(
+                obs["ems"],
+                unbatched_ndim=2,
+                dtype=np.float32,
+            ),
+            block_mask=_batch_cascaded_value(
+                obs["block_mask"],
+                unbatched_ndim=1,
+                dtype=bool,
+            ),
+            loading_mask=_batch_cascaded_value(
+                obs["loading_mask"],
+                unbatched_ndim=2,
+                dtype=bool,
+            ),
+            action_mask=_batch_cascaded_value(
+                obs["action_mask"],
+                unbatched_ndim=2,
+                dtype=bool,
+            ),
         )
         with torch.no_grad():
             act_out, _ = self.actor(data)
