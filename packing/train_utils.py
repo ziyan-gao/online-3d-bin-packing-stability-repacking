@@ -344,6 +344,7 @@ def prepare_training_output(config: TrainConfig) -> tuple[str, str]:
 def make_training_callbacks(
     config: TrainConfig,
     save_dir: str,
+    policy,
     optimizer: torch.optim.Optimizer,
 ):
     metadata = training_checkpoint_metadata(config)

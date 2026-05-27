@@ -179,6 +179,10 @@ def test_best_policy_checkpoint_carries_policy_metadata(tmp_path):
                 "critic.weight": torch.tensor([2.0]),
             }
 
+    class DummyOptimizer:
+        def state_dict(self):
+            return {"lr": 0.001}
+
     config = TrainConfig(
         data_name="random",
         container_dx=600,
@@ -193,7 +197,8 @@ def test_best_policy_checkpoint_carries_policy_metadata(tmp_path):
     _, save_best_fn, _ = make_training_callbacks(
         config,
         str(tmp_path),
-        optimizer=None,
+        policy=DummyPolicy(),
+        optimizer=DummyOptimizer(),
     )
 
     save_best_fn(DummyPolicy())
@@ -207,6 +212,41 @@ def test_best_policy_checkpoint_carries_policy_metadata(tmp_path):
     assert checkpoint["policy_mode"] == "cascaded_block_selector"
     assert checkpoint["container_size"] == (600, 600, 600)
     assert checkpoint["buffer_size"] == 12
+
+
+def test_periodic_training_checkpoint_captures_policy_state(tmp_path):
+    class DummyPolicy:
+        def state_dict(self):
+            return {
+                "actor.weight": torch.tensor([3.0]),
+                "critic.weight": torch.tensor([4.0]),
+            }
+
+    class DummyOptimizer:
+        def state_dict(self):
+            return {"lr": 0.002}
+
+    config = TrainConfig(
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    _, _, save_checkpoint_fn = make_training_callbacks(
+        config,
+        str(tmp_path),
+        policy=DummyPolicy(),
+        optimizer=DummyOptimizer(),
+    )
+
+    ckpt_path = save_checkpoint_fn(epoch=1, env_step=2, gradient_step=3)
+
+    checkpoint = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    assert checkpoint["model"]["actor.weight"].item() == 3.0
+    assert checkpoint["optim"] == {"lr": 0.002}
+    assert checkpoint["epoch"] == 1
+    assert checkpoint["env_step"] == 2
+    assert checkpoint["gradient_step"] == 3
+    assert checkpoint["policy_mode"] == "cascaded_block_selector"
 
 
 def test_select_training_device_uses_runtime_compatibility_guard(monkeypatch):

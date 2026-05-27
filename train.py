@@ -110,6 +110,7 @@ def train(config: TrainConfig) -> None:
     callbacks = make_training_callbacks(
         config,
         save_dir,
+        policy,
         optimizer,
     )
     writer, logger = make_training_logger(config, label, resume_state)
