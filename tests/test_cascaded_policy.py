@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from model.cascaded_actor import CascadedActor
 from model.cascaded_critic import CascadedCritic
 from model.cascaded_policy import CascadedCategoricalMasked
+from packing.policy_loader import build_net
 from packing.train_utils import TrainConfig, load_training_checkpoint
 from packing.test_utils import DEFAULT_TEST_CONFIG, load_test_config
 
@@ -160,3 +161,10 @@ def test_cascaded_critic_returns_batch_value():
     value = critic(make_cascaded_obs())
 
     assert value.shape == (1,)
+
+
+def test_build_net_returns_cascaded_models_for_cascaded_policy_mode():
+    actor, critic = build_net(device="cpu", policy_mode="cascaded_block_selector")
+
+    assert isinstance(actor, CascadedActor)
+    assert isinstance(critic, CascadedCritic)

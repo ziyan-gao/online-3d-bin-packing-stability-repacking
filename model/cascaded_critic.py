@@ -35,13 +35,13 @@ class CascadedCritic(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(embed_size, 1),
         )
-        self.to(self.device)
+        self.to(device=self.device, dtype=self.dtype)
 
     @property
     def num_param(self):
         return sum(p.numel() for p in self.parameters())
 
-    def forward(self, obs: Any, state: Any = None, info={}) -> torch.Tensor:
+    def forward(self, obs: Any, state: Any = None, info: Any | None = None) -> torch.Tensor:
         blocks = torch.as_tensor(
             obs.oriented_blocks,
             dtype=self.dtype,
@@ -62,9 +62,13 @@ class CascadedCritic(nn.Module):
 
         block_embed = self.block_encoder(blocks)
         ems_embed = self.ems_encoder(ems)
-        block_pool = (block_embed * block_mask.unsqueeze(-1).float()).sum(dim=1)
+        block_pool = (
+            block_embed * block_mask.unsqueeze(-1).to(dtype=block_embed.dtype)
+        ).sum(dim=1)
         block_pool = block_pool / block_mask.sum(dim=1, keepdim=True).clamp(min=1)
-        ems_pool = (ems_embed * ems_mask.unsqueeze(-1).float()).sum(dim=1)
+        ems_pool = (
+            ems_embed * ems_mask.unsqueeze(-1).to(dtype=ems_embed.dtype)
+        ).sum(dim=1)
         ems_pool = ems_pool / ems_mask.sum(dim=1, keepdim=True).clamp(min=1)
         value = self.value_head(torch.cat([block_pool, ems_pool], dim=-1))
         return value.squeeze(-1)

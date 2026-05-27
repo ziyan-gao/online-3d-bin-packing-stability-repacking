@@ -114,13 +114,25 @@ def load_checkpoint_state_dict(checkpoint_path: str, device):
     return state_dict
 
 
-def build_net(device: str = "cuda"):
+def build_net(device: str = "cuda", policy_mode: str = "largest_block_baseline"):
+    runtime_device = torch.device(device)
+
+    if policy_mode == "cascaded_block_selector":
+        from model.cascaded_actor import CascadedActor
+        from model.cascaded_critic import CascadedCritic
+
+        actor = CascadedActor(device=runtime_device)
+        critic = CascadedCritic(device=runtime_device)
+        return actor, critic
+
+    if policy_mode != "largest_block_baseline":
+        raise ValueError(f"Unknown policy_mode: {policy_mode!r}")
+
     from model.actor import Actor
     from model.critic import Critic
     from model.packing_transformer import PackingTransformer
     from model.space_embed import SpaceEmbed
 
-    runtime_device = torch.device(device)
     space_embed = SpaceEmbed(embed_dim=128)
     pack_transform = PackingTransformer(
         embed_dim=128,
@@ -133,9 +145,14 @@ def build_net(device: str = "cuda"):
     return actor, critic
 
 
-def build_policy(checkpoint_path: str, device: str | None = None, k_placement: int = 80):
+def build_policy(
+    checkpoint_path: str,
+    device: str | None = None,
+    k_placement: int = 80,
+    policy_mode: str = "largest_block_baseline",
+):
     runtime_device = resolve_runtime_device(device)
-    actor, critic = build_net(device=str(runtime_device))
+    actor, critic = build_net(device=str(runtime_device), policy_mode=policy_mode)
     load_policy_weights(actor, critic, checkpoint_path, runtime_device)
     return actor, critic
 

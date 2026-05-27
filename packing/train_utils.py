@@ -137,6 +137,7 @@ def make_envs(config: TrainConfig):
                 remove_inscribed_ems=config.remove_inscribed_ems,
                 stack_only=config.stack_only,
                 use_simple_blocks=config.use_simple_blocks,
+                policy_mode=config.policy_mode,
             )
             for _ in range(config.train_env_num)
         ]
@@ -152,6 +153,7 @@ def make_envs(config: TrainConfig):
                 remove_inscribed_ems=config.remove_inscribed_ems,
                 stack_only=config.stack_only,
                 use_simple_blocks=config.use_simple_blocks,
+                policy_mode=config.policy_mode,
             )
             for _ in range(config.test_env_num)
         ]
@@ -172,6 +174,7 @@ def make_single_env(config: TrainConfig):
         remove_inscribed_ems=config.remove_inscribed_ems,
         stack_only=config.stack_only,
         use_simple_blocks=config.use_simple_blocks,
+        policy_mode=config.policy_mode,
     )
 
 
@@ -188,17 +191,23 @@ def build_training_policy(config: TrainConfig, env, device: str):
     from tianshou.utils.net.common import ActorCritic
     from tianshou.policy.modelfree.ppo import PPOTrainingStats
 
+    from model.cascaded_policy import CascadedCategoricalMasked
     from packing.policy_loader import CategoricalMasked, build_net
 
-    actor, critic = build_net(device=device)
+    actor, critic = build_net(device=device, policy_mode=config.policy_mode)
     actor_critic = ActorCritic(actor, critic)
     optimizer = torch.optim.Adam(actor_critic.parameters(), lr=config.learning_rate)
+    dist_fn = (
+        CascadedCategoricalMasked
+        if config.policy_mode == "cascaded_block_selector"
+        else CategoricalMasked
+    )
 
     policy: PPOPolicy[PPOTrainingStats] = PPOPolicy(
         actor=actor,
         critic=critic,
         optim=optimizer,
-        dist_fn=CategoricalMasked,
+        dist_fn=dist_fn,
         discount_factor=1.0,
         eps_clip=0.3,
         vf_coef=0.5,

@@ -47,13 +47,13 @@ class CascadedActor(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(embed_size, 1),
         )
-        self.to(self.device)
+        self.to(device=self.device, dtype=self.dtype)
 
     @property
     def num_param(self):
         return sum(p.numel() for p in self.parameters())
 
-    def forward(self, obs: Any, state: Any = None, info={}):
+    def forward(self, obs: Any, state: Any = None, info: Any | None = None):
         blocks = torch.as_tensor(
             obs.oriented_blocks,
             dtype=self.dtype,
@@ -75,7 +75,7 @@ class CascadedActor(nn.Module):
         ems_embed = self.ems_encoder(ems)
         block_logits = self.block_head(block_embed).squeeze(-1)
 
-        block_mask_float = block_mask.unsqueeze(-1).float()
+        block_mask_float = block_mask.unsqueeze(-1).to(dtype=block_embed.dtype)
         block_context = (block_embed * block_mask_float).sum(
             dim=1,
             keepdim=True,
