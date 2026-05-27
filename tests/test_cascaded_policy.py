@@ -14,7 +14,13 @@ from model.cascaded_policy import CascadedCategoricalMasked
 from packing.policy_loader import build_net
 from packing.train_utils import TrainConfig, load_training_checkpoint
 import packing.test_utils as test_utils
-from packing.test_utils import DEFAULT_TEST_CONFIG, build_agent, build_env, load_test_config
+from packing.test_utils import (
+    DEFAULT_TEST_CONFIG,
+    build_agent,
+    build_env,
+    load_test_config,
+    reject_unsupported_cascaded_mcts,
+)
 from packing_env.data_type.buffer import Buffer
 from packing_env.data_type.geometry import Orthogonal3D
 from packing_env.gym_env import PackingEnv
@@ -232,6 +238,25 @@ def test_test_utils_build_agent_propagates_cascaded_policy_mode(monkeypatch):
         "checkpoint_path": "checkpoint.pth",
         "policy_mode": "cascaded_block_selector",
     }
+
+
+def test_cascaded_mcts_validation_is_rejected_when_target_not_reached():
+    config = SimpleNamespace(
+        policy_mode="cascaded_block_selector",
+        use_mcts=True,
+    )
+
+    with pytest.raises(ValueError, match="cascaded_block_selector.*use_mcts"):
+        reject_unsupported_cascaded_mcts(config, target_reached=False)
+
+
+def test_cascaded_no_mcts_validation_is_allowed_when_target_not_reached():
+    config = SimpleNamespace(
+        policy_mode="cascaded_block_selector",
+        use_mcts=False,
+    )
+
+    reject_unsupported_cascaded_mcts(config, target_reached=False)
 
 
 def test_cascaded_env_step_can_use_flat_policy_action():

@@ -283,6 +283,17 @@ def run_mcts_search(config: TestConfig, env: PackingEnv, agent, blocked_item):
     return result
 
 
+def reject_unsupported_cascaded_mcts(config: TestConfig, target_reached: bool) -> None:
+    if (
+        getattr(config, "policy_mode", "largest_block_baseline") == "cascaded_block_selector"
+        and getattr(config, "use_mcts", True)
+        and not target_reached
+    ):
+        raise ValueError(
+            "cascaded_block_selector validation does not support use_mcts=True yet"
+        )
+
+
 def replay_search_result(config: TestConfig, env: PackingEnv, seed: int, visualizer: Visualizer, result):
     plan = result
     print_mcts_steps(plan)
@@ -320,6 +331,7 @@ def validate_sequence(config: TestConfig, seed: int) -> dict:
         seed,
         visualizer,
     )
+    reject_unsupported_cascaded_mcts(config, target_reached)
 
     if target_reached:
         visualizer.save_sequence_replay(
