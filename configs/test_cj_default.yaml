@@ -13,6 +13,7 @@ buffer_space: 10
 remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
+policy_mode: largest_block_baseline
 visualize: false
 visual_dir: outputs/three_live/cj_policy
 visual_z_max: 1400.0

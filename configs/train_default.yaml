@@ -7,6 +7,7 @@ k_placement: 80
 remove_inscribed_ems: false
 stack_only: false
 use_simple_blocks: false
+policy_mode: largest_block_baseline
 train_env_num: 64
 test_env_num: 32
 train_env_seed: 5

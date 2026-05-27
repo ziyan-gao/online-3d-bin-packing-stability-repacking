@@ -54,6 +54,11 @@ def parse_train_args() -> TrainConfig:
         action=argparse.BooleanOptionalAction,
         help="Use generated SimpleBlock candidates instead of FIFO single-box sampling.",
     )
+    parser.add_argument(
+        "--policy-mode",
+        choices=("largest_block_baseline", "cascaded_block_selector"),
+        help="Policy architecture to train.",
+    )
     args = parser.parse_args()
 
     config = load_train_config(args.config)
@@ -65,6 +70,7 @@ def parse_train_args() -> TrainConfig:
         "remove_inscribed_ems": args.remove_inscribed_ems,
         "stack_only": args.stack_only,
         "use_simple_blocks": args.use_simple_blocks,
+        "policy_mode": args.policy_mode,
     }
     overrides = {key: value for key, value in overrides.items() if value is not None}
     return replace(config, **overrides)

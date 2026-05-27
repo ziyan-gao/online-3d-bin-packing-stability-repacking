@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TRAIN_CONFIG = os.path.join(PROJECT_ROOT, "configs", "train_default.yaml")
+VALID_POLICY_MODES = {"largest_block_baseline", "cascaded_block_selector"}
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class TrainConfig:
     remove_inscribed_ems: bool = False
     stack_only: bool = False
     use_simple_blocks: bool = False
+    policy_mode: str = "largest_block_baseline"
     train_env_num: int = 64
     test_env_num: int = 32
     train_env_seed: int = 5
@@ -46,6 +48,17 @@ class TrainConfig:
     output_name: str | None = None
     tb_log_dir: str | None = None
     resume_checkpoint: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.policy_mode not in VALID_POLICY_MODES:
+            raise ValueError(
+                f"policy_mode must be one of {sorted(VALID_POLICY_MODES)}, "
+                f"got {self.policy_mode!r}"
+            )
+        if self.policy_mode == "cascaded_block_selector" and not self.use_simple_blocks:
+            object.__setattr__(self, "use_simple_blocks", True)
+        if self.policy_mode == "cascaded_block_selector" and not self.stack_only:
+            object.__setattr__(self, "stack_only", True)
 
 
 def load_train_config(config_path: str = DEFAULT_TRAIN_CONFIG) -> TrainConfig:
@@ -260,8 +273,13 @@ def load_training_checkpoint(
         "remove_inscribed_ems": config.remove_inscribed_ems,
         "stack_only": config.stack_only,
         "use_simple_blocks": config.use_simple_blocks,
+        "policy_mode": config.policy_mode,
     }
-    checkpoint_defaults = {"stack_only": False, "use_simple_blocks": False}
+    checkpoint_defaults = {
+        "stack_only": False,
+        "use_simple_blocks": False,
+        "policy_mode": "largest_block_baseline",
+    }
     mismatches = {
         key: (checkpoint.get(key, checkpoint_defaults.get(key)), value)
         for key, value in expected.items()
@@ -333,6 +351,9 @@ def make_training_callbacks(
                 "buffer_size": config.buffer_size,
                 "k_placement": config.k_placement,
                 "remove_inscribed_ems": config.remove_inscribed_ems,
+                "stack_only": config.stack_only,
+                "use_simple_blocks": config.use_simple_blocks,
+                "policy_mode": config.policy_mode,
                 "epoch": epoch,
                 "env_step": env_step,
                 "gradient_step": gradient_step,
