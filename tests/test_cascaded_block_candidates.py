@@ -118,6 +118,30 @@ def test_cascaded_observation_contains_blocks_and_loading_mask():
     assert np.array_equal(obs["action_mask"], obs["loading_mask"])
 
 
+def test_cascaded_observation_space_contains_large_buffer_stack_features():
+    box = Orthogonal3D(100, 100, 100)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=13,
+        container_size=(2000, 2000, 2000),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    env.buffer = Buffer(
+        capacity=13,
+        data_sampler=FakeSampler([box]),
+        stack_only=True,
+        container_size=(2000, 2000, 2000),
+    )
+
+    obs = env.get_next_observation()
+
+    assert obs["oriented_blocks"].max() <= 1.0
+    assert env.observation_space.contains(obs)
+
+
 def test_cascaded_action_decoding_applies_orientation_once():
     box = Orthogonal3D(300, 100, 50)
     env = PackingEnv(

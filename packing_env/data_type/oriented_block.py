@@ -53,13 +53,18 @@ class OrientedBlock:
         placed.rot = self.rotate_xy
         return placed
 
-    def feature_row(self, container_size: tuple[int, int, int]) -> np.ndarray:
+    def feature_row(
+        self,
+        container_size: tuple[int, int, int],
+        max_stack_count: int = 12,
+    ) -> np.ndarray:
         container = np.asarray(container_size, dtype=np.float32)
+        stack_scale = max(float(max_stack_count), 1.0)
         return np.asarray(
             [
                 *(self.Dim.raw().astype(np.float32) / container),
                 *(self.Virtual_Dim.raw().astype(np.float32) / container),
-                self.consumed_count / 12.0,
+                self.consumed_count / stack_scale,
                 float(self.rotate_xy),
             ],
             dtype=np.float32,

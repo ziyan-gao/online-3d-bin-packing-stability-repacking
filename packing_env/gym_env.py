@@ -630,7 +630,8 @@ class PackingEnv(gym.Env):
                     self.container.dx,
                     self.container.dy,
                     self.container.dz,
-                )
+                ),
+                max_stack_count=self.buffer.capacity,
             )
             block_mask[idx] = True
         if visible_count > 0:
