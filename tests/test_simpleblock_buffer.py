@@ -1,4 +1,9 @@
+import sys
+from pathlib import Path
+
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from packing_env.data_type.buffer import Buffer
 from packing_env.data_type.ems import EmptyMaximalSpace
@@ -159,6 +164,31 @@ def test_packing_env_stack_only_mode_places_simpleblock_as_item():
     assert isinstance(env.container.placed_items[0], Item)
     assert len(env.buffer.buffer) == env.buffer.capacity
     assert done in (True, False)
+
+
+def test_largest_block_baseline_observation_keeps_single_largest_stack():
+    box = Orthogonal3D(100, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=3,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="largest_block_baseline",
+    )
+    env.reset(seed=101)
+    env.buffer = Buffer(
+        capacity=3,
+        data_sampler=FakeSampler([box, box, box, box]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+
+    env.select_largest_policy_block()
+    obs = env.get_pack_data(env.buffer.sample_blocks(deterministic=True))
+
+    assert obs["item_raw"].shape[0] == 1
+    assert obs["item_raw"][0].tolist() == [100.0, 100.0, 150.0]
 
 
 class NoopVisualizer:
