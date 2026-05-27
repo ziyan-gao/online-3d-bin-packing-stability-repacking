@@ -24,6 +24,7 @@ from packing.train_utils import (
 import packing.test_utils as test_utils
 from packing.test_utils import (
     DEFAULT_TEST_CONFIG,
+    PROJECT_ROOT as TEST_PROJECT_ROOT,
     build_agent,
     build_env,
     load_test_config,
@@ -117,6 +118,17 @@ def test_test_config_stores_cascaded_policy_mode():
     config = test_utils.TestConfig(policy_mode="cascaded_block_selector")
 
     assert config.policy_mode == "cascaded_block_selector"
+
+
+def test_test_cj_default_uses_baseline_block_checkpoint():
+    config = load_test_config(str(Path(TEST_PROJECT_ROOT) / "configs/test_cj_default.yaml"))
+
+    assert config.checkpoint == "outputs/train_outputs/baseline-blocks/policy_step.pth"
+    assert config.ds_name == "CJ"
+    assert config.stack_only
+    assert config.use_simple_blocks
+    assert config.policy_mode == "largest_block_baseline"
+    assert config.use_mcts is False
 
 
 def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):
