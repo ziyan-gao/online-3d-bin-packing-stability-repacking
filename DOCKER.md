@@ -58,8 +58,8 @@ docker compose --profile gpu run --rm app-gpu \
 `docker-compose.demo.yml` is a CPU-first compose file for quick demonstrations.
 It builds the same Docker image, bind-mounts the repo into `/app`, and runs
 portable train/test/notebook workflows without requiring NVIDIA Docker.
-The demo train/test commands read their smoke settings from
-`configs/train_demo.yaml` and `configs/test_demo.yaml`.
+The demo train/test commands read their settings from
+`configs/train_default.yaml` and `configs/test_default.yaml`.
 
 Build the demo image:
 

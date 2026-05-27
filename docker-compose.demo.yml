@@ -16,14 +16,14 @@ services:
     <<: *demo-common
     container_name: cj-block-demo-train
     command: >
-      bash -lc "python train.py --config configs/train_demo.yaml"
+      bash -lc "python train.py --config configs/train_default.yaml"
 
   test:
     <<: *demo-common
     container_name: cj-block-demo-test
     command: >
       bash -lc "mkdir -p _plotly_live/demo_compose &&
-      python test.py --config configs/test_demo.yaml"
+      python test.py --config configs/test_default.yaml"
 
   notebook:
     <<: *demo-common

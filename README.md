@@ -158,16 +158,16 @@ Then open:
 http://127.0.0.1:8765
 ```
 
-Run a deterministic validation/MCTS smoke demo:
+Run a deterministic validation/MCTS run:
 
 ```bash
-python test.py --config configs/test_demo.yaml
+python test.py --config configs/test_default.yaml
 ```
 
-Run a short training smoke demo:
+Run training:
 
 ```bash
-python train.py --config configs/train_demo.yaml
+python train.py --config configs/train_default.yaml
 ```
 
 ## Main Components
@@ -179,20 +179,19 @@ python train.py --config configs/train_demo.yaml
 - `train.py` and `test.py`: script entry points for training and validation.
 - `tutorials/`: notebook walkthroughs and simulator notes.
 - `interactive_simulator_app/`: browser-based manual packing simulator.
-- `configs/`: default and smoke-demo train/test configuration files.
+- `configs/`: default train/test configuration files.
 - `Dockerfile`, `docker-compose.yml`, `docker-compose.demo.yml`, and
   `DOCKER.md`: containerized workflows.
 
 ## Validation And Testing
 
 Default train/test settings live in `configs/train_default.yaml` and
-`configs/test_default.yaml`. Shorter demonstration settings live in
-`configs/train_demo.yaml` and `configs/test_demo.yaml`.
+`configs/test_default.yaml`.
 
-Run the demo validation sequence:
+Run the validation sequence:
 
 ```bash
-python test.py --config configs/test_demo.yaml
+python test.py --config configs/test_default.yaml
 ```
 
 Run a custom greedy validation sequence:
@@ -234,12 +233,6 @@ are written under `_plotly_live/` when `--save-replay` is enabled.
 This public release includes a pretrained demo checkpoint under
 `train_outputs/random/`. The default policy examples use
 `train_outputs/random/policy_step.pth` when available.
-
-Run the short smoke training configuration:
-
-```bash
-python train.py --config configs/train_demo.yaml
-```
 
 Run the default training configuration:
 
