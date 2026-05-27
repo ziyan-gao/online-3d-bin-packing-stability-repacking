@@ -10,6 +10,7 @@ from .data_type.ems import EmptyMaximalSpace
 from .data_type.geometry import Orthogonal3D, Point3D
 from .data_type.item import Item, SimpleBlock
 from .data_type.maps import HeightMap
+from .data_type.oriented_block import OrientedBlock
 from .heu_stable import Heu_Stable
 from .heu_ems import EMS
 
@@ -24,6 +25,7 @@ class PackingEnv(gym.Env):
         remove_inscribed_ems: bool = False,
         stack_only: bool = False,
         use_simple_blocks: bool = False,
+        policy_mode: str = "largest_block_baseline",
     ) -> None:
         """Initialize the packing environment.
         
@@ -46,8 +48,17 @@ class PackingEnv(gym.Env):
         self.k_placement = k_placement
         self.item_buffer_space = int(item_buffer_space)
         self.remove_inscribed_ems = bool(remove_inscribed_ems)
+        self.policy_mode = str(policy_mode)
+        if self.policy_mode not in {
+            "largest_block_baseline",
+            "cascaded_block_selector",
+        }:
+            raise ValueError(f"Unknown policy_mode: {self.policy_mode!r}")
         self.stack_only = bool(stack_only)
         self.use_simple_blocks = bool(use_simple_blocks or stack_only)
+        if self.policy_mode == "cascaded_block_selector":
+            self.stack_only = True
+            self.use_simple_blocks = True
         if self.item_buffer_space < 0:
             raise ValueError("item_buffer_space must be non-negative.")
         if self.item_buffer_space % self.hm.resolution != 0:
@@ -374,6 +385,63 @@ class PackingEnv(gym.Env):
                 return block
         self.buffer.simple_blocks = {}
         return None
+
+    def get_cascaded_block_candidates(self):
+        oriented_candidates = []
+        mask_rows = []
+        ems_list = self._get_item_fit_ems_list(
+            self.buffer.all_blocks,
+            prefer_stable=True,
+        )
+
+        if not ems_list:
+            return (
+                oriented_candidates,
+                ems_list,
+                np.zeros((0, self.k_placement), dtype=bool),
+            )
+
+        lps = np.array([ems.FLB.topix() for ems in ems_list])
+        for source_index, block in enumerate(self.buffer.all_blocks):
+            for rotate_xy in (False, True):
+                oriented = OrientedBlock.from_block(
+                    block,
+                    source_index=source_index,
+                    rotate_xy=rotate_xy,
+                )
+                fit_mask = np.array(
+                    [ems.include(oriented.Virtual_Dim) for ems in ems_list],
+                    dtype=bool,
+                )
+                if not fit_mask.any():
+                    continue
+
+                stable_placements, is_stable = self.heu_stable(
+                    o3d=oriented.Dim,
+                    hm=self.hm,
+                    candidates=lps[fit_mask],
+                )
+                row = np.zeros((self.k_placement,), dtype=bool)
+                fit_indices = np.flatnonzero(fit_mask)
+                for local_index, ems_index in enumerate(fit_indices):
+                    stable_placement = stable_placements[local_index]
+                    if (
+                        bool(is_stable[local_index])
+                        and stable_placement is not None
+                        and stable_placement == ems_list[int(ems_index)].FLB
+                    ):
+                        row[int(ems_index)] = True
+                if row.any():
+                    oriented_candidates.append(oriented)
+                    mask_rows.append(row)
+
+        if not mask_rows:
+            return (
+                oriented_candidates,
+                ems_list,
+                np.zeros((0, self.k_placement), dtype=bool),
+            )
+        return oriented_candidates, ems_list, np.asarray(mask_rows, dtype=bool)
 
     def _coerce_items(self, items) -> list[Orthogonal3D]:
         """Convert raw item dimensions or Orthogonal3D objects to a list."""
