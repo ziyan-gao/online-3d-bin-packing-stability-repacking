@@ -96,6 +96,12 @@ def test_test_config_accepts_default_policy_mode():
     assert config.policy_mode == "largest_block_baseline"
 
 
+def test_test_config_stores_cascaded_policy_mode():
+    config = test_utils.TestConfig(policy_mode="cascaded_block_selector")
+
+    assert config.policy_mode == "cascaded_block_selector"
+
+
 def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):
     checkpoint_path = tmp_path / "checkpoint.pth"
     torch = pytest.importorskip("torch")

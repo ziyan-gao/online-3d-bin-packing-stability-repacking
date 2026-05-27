@@ -53,6 +53,11 @@ def parse_test_args() -> TestConfig:
         action=argparse.BooleanOptionalAction,
         help="Use generated SimpleBlock candidates instead of FIFO single-box sampling.",
     )
+    parser.add_argument(
+        "--policy-mode",
+        choices=("largest_block_baseline", "cascaded_block_selector"),
+        help="Policy architecture to validate.",
+    )
     parser.add_argument("--visualize", action=argparse.BooleanOptionalAction)
     parser.add_argument(
         "--show-ems",
@@ -85,6 +90,7 @@ def parse_test_args() -> TestConfig:
         "remove_inscribed_ems": args.remove_inscribed_ems,
         "stack_only": args.stack_only,
         "use_simple_blocks": args.use_simple_blocks,
+        "policy_mode": args.policy_mode,
         "visualize": args.visualize,
         "show_ems": args.show_ems,
         "ems_visual_mode": args.ems_visual_mode,
