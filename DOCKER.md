@@ -1,114 +1,114 @@
 # Docker Usage
 
+Docker is optional. Use it when you want a reproducible project environment for
+the demo, notebook, validation runs, or GPU training without tuning local Python,
+PyTorch, SQLite, Jupyter, and Tianshou installs by hand.
+
+## What Docker Provides
+
+- Python 3.11 with the project dependency stack.
+- CUDA-capable PyTorch wheels; GPU access is enabled only for the `train-gpu`
+  compose service.
+- A pinned Tianshou source revision for reproducible behavior.
+- System packages needed by notebook and visualization workflows.
+- Bind-mounted source code, so outputs and edited files stay in this checkout.
+
 ## Build
 
+Build the default image:
+
 ```bash
-docker build -t cj-block:latest .
+docker compose build
 ```
 
-Build a new versioned image (and keep `latest` in sync):
+Build a versioned image:
 
 ```bash
-export IMAGE_TAG=v2026.04.01
-docker build -t cj-block:${IMAGE_TAG} -t cj-block:latest .
+export IMAGE_TAG=v2026.05.27
+docker compose build
 ```
 
-## Run (CPU)
+You can override the pinned Tianshou revision at build time:
 
 ```bash
-docker run --rm -it -v "$PWD":/app -w /app cj-block:latest
+docker compose build --build-arg TIANSHOU_REF=<commit>
 ```
 
-Then run your scripts inside the container, for example:
+## Shell
+
+Open an interactive container:
 
 ```bash
-python train.py
-python test.py
+docker compose run --rm shell
 ```
 
-## Run with Docker Compose
-
-Compose uses `IMAGE_TAG` (defaults to `latest`), so you can choose the version:
+From there, run normal project commands such as:
 
 ```bash
-export IMAGE_TAG=v2026.04.01
+python test.py --config configs/test_default.yaml
+python train.py --config configs/train_default.yaml
 ```
 
-CPU shell:
+## Validation
+
+Run the default validation command:
 
 ```bash
-docker compose run --rm app
+docker compose run --rm test
 ```
 
-GPU shell (requires NVIDIA Container Toolkit):
+## Demo Replay
+
+Generate a replay/demo artifact under `_three_live/demo/`:
 
 ```bash
-docker compose --profile gpu run --rm app-gpu
+docker compose run --rm demo
 ```
 
-Quick GPU check:
+## Notebook
+
+Start JupyterLab on the packing tutorial:
 
 ```bash
-docker compose --profile gpu run --rm app-gpu \
-  python -c "import torch; print('cuda:', torch.cuda.is_available(), 'count:', torch.cuda.device_count())"
-```
-
-## Demo Compose File
-
-`docker-compose.demo.yml` is a CPU-first compose file for quick demonstrations.
-It builds the same Docker image, bind-mounts the repo into `/app`, and runs
-portable train/test/notebook workflows without requiring NVIDIA Docker.
-The demo train/test commands read their settings from
-`configs/train_default.yaml` and `configs/test_default.yaml`.
-
-Build the demo image:
-
-```bash
-docker compose -f docker-compose.demo.yml config
-docker compose -f docker-compose.demo.yml build
-```
-
-Run the deterministic MCTS validation demo:
-
-```bash
-docker compose -f docker-compose.demo.yml run --rm test
-```
-
-Generated interactive replays are written under `_plotly_live/`, especially
-`_plotly_live/demo_compose/` for this service.
-
-Run a short training smoke test:
-
-```bash
-docker compose -f docker-compose.demo.yml run --rm train
-```
-
-Start JupyterLab for `tutorials/packing_demo.ipynb`:
-
-```bash
-docker compose -f docker-compose.demo.yml up notebook
+docker compose up notebook
 ```
 
 Open:
 
 ```text
-http://localhost:8888
+http://localhost:8890
 ```
 
 The notebook service starts without a token for local demo convenience. Do not
 expose it on an untrusted network.
 
+## GPU Training
+
+GPU training requires NVIDIA Container Toolkit on the host.
+
+Start the GPU training service:
+
+```bash
+docker compose --profile gpu up train-gpu
+```
+
+TensorBoard is exposed at:
+
+```text
+http://localhost:16006
+```
+
+Quick GPU check:
+
+```bash
+docker compose --profile gpu run --rm train-gpu \
+  python -c "import torch; print('cuda:', torch.cuda.is_available(), 'count:', torch.cuda.device_count())"
+```
+
 ## Notes
 
-- The image uses Python 3.11 and CUDA-capable PyTorch wheels (`cu121`).
-- The image installs Debian `sqlite3`/`libsqlite3` packages and checks
-  `import sqlite3` during build, so notebook/kernel tooling does not fail on a
-  missing or mismatched SQLite runtime.
-- To use CUDA at runtime, run the container with NVIDIA runtime (`--gpus all` or the compose GPU profile).
-- `app-gpu` also sets `NVIDIA_VISIBLE_DEVICES=all` and `NVIDIA_DRIVER_CAPABILITIES=compute,utility`.
-- General dependencies are installed from `requirements_docker.txt` (ROS-free).
-- Tianshou is installed from a pinned Git commit during image build for reproducibility.
-- `docker-compose.yml` includes a GPU profile (`app-gpu`) if your host supports it.
-- Project checkpoints/datasets/log artifacts are excluded from build context by `.dockerignore` to keep builds fast.
-
-- You can override the pinned Tianshou revision at build time with `--build-arg TIANSHOU_REF=<commit>`.
+- Compose uses `IMAGE_TAG`; default is `latest`.
+- Live visualization ports default to `8765` through `8769`, depending on the
+  service.
+- Project checkpoints, datasets, logs, and generated artifacts are excluded from
+  build context by `.dockerignore` to keep builds fast.

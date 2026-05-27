@@ -1,75 +1,85 @@
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: cj-block:${IMAGE_TAG:-latest}
+  working_dir: /app
+  volumes:
+    - ./:/app
+  environment:
+    MPLCONFIGDIR: /tmp/matplotlib
+    XDG_CACHE_HOME: /tmp
+    LIVE_PLOT_BIND_HOST: 0.0.0.0
+    LIVE_PLOT_PUBLIC_HOST: localhost
+
 services:
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   image: cj-block:latest
-  #   container_name: cj-block-app
-  #   working_dir: /app
-  #   tty: true
-  #   stdin_open: true
-  #   volumes:
-  #     - ./:/app
-  #   ports:
-  #     - "${LIVE_PLOT_HOST_PORT:-8765}:8765"
-  #   environment:
-  #     LIVE_PLOT_BIND_HOST: 0.0.0.0
-  #     LIVE_PLOT_PUBLIC_HOST: localhost
-  #   command: bash
-
-  # app-gpu:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   image: cj-block:latest
-  #   container_name: cj-block-gpu
-  #   working_dir: /app
-  #   tty: true
-  #   stdin_open: true
-  #   volumes:
-  #     - ./:/app
-  #   ports:
-  #     - "${LIVE_PLOT_HOST_PORT_GPU:-8766}:8765"
-  #   command: bash
-  #   gpus: all
-  #   environment:
-  #     LIVE_PLOT_BIND_HOST: 0.0.0.0
-  #     LIVE_PLOT_PUBLIC_HOST: localhost
-  #     NVIDIA_VISIBLE_DEVICES: all
-  #     NVIDIA_DRIVER_CAPABILITIES: compute,utility
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: all
-  #             capabilities: [gpu]
-  #   profiles: ["gpu"]
-
-  train_dist_cj:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: cj-block:${IMAGE_TAG:-latest}
-    working_dir: /app
+  shell:
+    <<: *app-common
+    container_name: cj-block-shell
     tty: true
     stdin_open: true
     ports:
-      - "${LIVE_PLOT_HOST_PORT_CJ:-8766}:8765"
-      - "${TB_HOST_PORT_CJ:-16006}:6006"
+      - "${LIVE_PLOT_HOST_PORT:-8765}:8765"
+    command: bash
+
+  test:
+    <<: *app-common
+    container_name: cj-block-test
+    ports:
+      - "${LIVE_PLOT_HOST_PORT_TEST:-8766}:8765"
     command: >
-      bash -lc "mkdir -p /app/log/tensorboard/CJ &&
-      python train.py &
-      tensorboard --logdir /app/log/tensorboard/CJ --host 0.0.0.0 --port 6006 && wait"
-    # command: bash
+      bash -lc "python test.py --config configs/test_default.yaml"
+
+  demo:
+    <<: *app-common
+    container_name: cj-block-demo
+    ports:
+      - "${LIVE_PLOT_HOST_PORT_DEMO:-8767}:8765"
+    command: >
+      bash -lc "mkdir -p _three_live/demo &&
+      python test.py --config configs/test_default.yaml
+      --use-mcts=false
+      --save-replay=true
+      --replay-path _three_live/demo"
+
+  notebook:
+    <<: *app-common
+    container_name: cj-block-notebook
+    ports:
+      - "${JUPYTER_HOST_PORT:-8890}:8888"
+      - "${LIVE_PLOT_HOST_PORT_NOTEBOOK:-8768}:8765"
+    command: >
+      bash -lc "python -c 'import sqlite3; import tianshou; print(\"sqlite\", sqlite3.sqlite_version); print(\"tianshou ok\")' &&
+      jupyter lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --allow-root
+      --ServerApp.token=''
+      --ServerApp.password=''
+      --ServerApp.default_url=/lab/tree/tutorials/packing_demo.ipynb"
+
+  train-gpu:
+    <<: *app-common
+    container_name: cj-block-train-gpu
+    profiles: ["gpu"]
+    tty: true
+    stdin_open: true
+    ports:
+      - "${LIVE_PLOT_HOST_PORT_GPU:-8769}:8765"
+      - "${TB_HOST_PORT_GPU:-16006}:6006"
     gpus: all
     environment:
+      MPLCONFIGDIR: /tmp/matplotlib
+      XDG_CACHE_HOME: /tmp
       LIVE_PLOT_BIND_HOST: 0.0.0.0
       LIVE_PLOT_PUBLIC_HOST: localhost
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      DATA_DIST: "CJ"
-      BUFFER_SIZE: "${BUFFER_SIZE:-12}"
+    command: >
+      bash -lc "mkdir -p /app/log/tensorboard/docker-gpu &&
+      python train.py --config configs/train_default.yaml &
+      tensorboard --logdir /app/log/tensorboard/docker-gpu --host 0.0.0.0 --port 6006 && wait"
     deploy:
       resources:
         reservations:
@@ -77,158 +87,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    profiles: ["gpu"]
-    container_name: train_dist_cj
-    volumes:
-      - ./:/app
-      - ./outputs/model_cj:/app/outputs
-
-
-  train_dist_cj_stack_off:
-    image: cj-block:${IMAGE_TAG:-latest}
-    working_dir: /app
-    tty: true
-    stdin_open: true
-    ports:
-      - "${LIVE_PLOT_HOST_PORT_CJ_STACK_OFF:-8776}:8765"
-      - "${TB_HOST_PORT_CJ_STACK_OFF:-16106}:6006"
-    command: >
-      bash -lc "mkdir -p /app/log/tensorboard/CJ_stack_off &&
-      python train.py &
-      tensorboard --logdir /app/log/tensorboard/CJ_stack_off --host 0.0.0.0 --port 6006 && wait"
-    gpus: all
-    environment:
-      LIVE_PLOT_BIND_HOST: 0.0.0.0
-      LIVE_PLOT_PUBLIC_HOST: localhost
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      DATA_DIST: "CJ"
-      TB_LOG_DIR: "CJ_stack_off"
-      BUFFER_SIZE: "12"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles: ["gpu"]
-    container_name: train_dist_cj_stack_off
-    volumes:
-      - ./:/app
-      - ./outputs/model_cj_stack_off:/app/outputs
-
-  train_dist_cj_uniform:
-    image: cj-block:${IMAGE_TAG:-latest}
-    working_dir: /app
-    tty: true
-    stdin_open: true
-    ports:
-      - "${LIVE_PLOT_HOST_PORT_CJ_UNIFORM:-8767}:8765"
-      - "${TB_HOST_PORT_CJ_UNIFORM:-16007}:6006"
-    command: >
-      bash -lc "mkdir -p /app/log/tensorboard/CJ_uniform &&
-      python train.py &
-      tensorboard --logdir /app/log/tensorboard/CJ_uniform --host 0.0.0.0 --port 6006 && wait"
-    gpus: all
-    environment:
-      LIVE_PLOT_BIND_HOST: 0.0.0.0
-      LIVE_PLOT_PUBLIC_HOST: localhost
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      DATA_DIST: "CJ_uniform"
-      BUFFER_SIZE: "${BUFFER_SIZE:-12}"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles: ["gpu"]
-    container_name: train_dist_cj_uniform
-    volumes:
-      - ./:/app
-      - ./outputs/model_cj_uniform:/app/outputs
-
-  train_dist_cj_big:
-    image: cj-block:${IMAGE_TAG:-latest}
-    working_dir: /app
-    tty: true
-    stdin_open: true
-    ports:
-      - "${LIVE_PLOT_HOST_PORT_CJ_BIG:-8768}:8765"
-      - "${TB_HOST_PORT_CJ_BIG:-16008}:6006"
-    command: >
-      bash -lc "mkdir -p /app/log/tensorboard/CJ_big &&
-      python train.py &
-      tensorboard --logdir /app/log/tensorboard/CJ_big --host 0.0.0.0 --port 6006 && wait"
-    gpus: all
-    environment:
-      LIVE_PLOT_BIND_HOST: 0.0.0.0
-      LIVE_PLOT_PUBLIC_HOST: localhost
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      DATA_DIST: "CJ_big"
-      BUFFER_SIZE: "${BUFFER_SIZE:-12}"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles: ["gpu"]
-    container_name: train_dist_cj_big
-    volumes:
-      - ./:/app
-      - ./outputs/model_cj_big:/app/outputs
-
-  train_dist_cj_random:
-    image: cj-block:${IMAGE_TAG:-latest}
-    working_dir: /app
-    tty: true
-    stdin_open: true
-    ports:
-      - "${LIVE_PLOT_HOST_PORT_CJ_RANDOM:-8769}:8765"
-      - "${TB_HOST_PORT_CJ_RANDOM:-16009}:6006"
-    command: >
-      bash -lc "mkdir -p /app/log/tensorboard/CJ_random &&
-      python train.py &
-      tensorboard --logdir /app/log/tensorboard/CJ_random --host 0.0.0.0 --port 6006 && wait"
-    gpus: all
-    environment:
-      LIVE_PLOT_BIND_HOST: 0.0.0.0
-      LIVE_PLOT_PUBLIC_HOST: localhost
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      DATA_DIST: "CJ_random"
-      BUFFER_SIZE: "${BUFFER_SIZE:-12}"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles: ["gpu"]
-    container_name: train_dist_cj_random
-    volumes:
-      - ./:/app
-      - ./outputs/model_cj_random:/app/outputs
-
-  portainer:
-    image: portainer/portainer-ce:2.20.0
-    container_name: cj-block-portainer
-    ports:
-      - "9000:9000"
-      - "8000:8000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer-data:/data
-    restart: unless-stopped
-    environment:
-      INITIAL_ADMIN_PASSWORD: admin
-
-volumes:
-  portainer-data:

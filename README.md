@@ -180,8 +180,8 @@ python train.py --config configs/train_default.yaml
 - `tutorials/`: notebook walkthroughs and simulator notes.
 - `interactive_simulator_app/`: browser-based manual packing simulator.
 - `configs/`: default train/test configuration files.
-- `Dockerfile`, `docker-compose.yml`, `docker-compose.demo.yml`, and
-  `DOCKER.md`: containerized workflows.
+- `Dockerfile`, `docker-compose.yml`, and `DOCKER.md`: containerized
+  workflows.
 
 ## Validation And Testing
 
@@ -306,31 +306,40 @@ python train.py --help
 Build the image:
 
 ```bash
-docker build -t cj-block:latest .
+docker compose build
 ```
 
 Start a CPU shell:
 
 ```bash
-docker compose run --rm app
+docker compose run --rm shell
 ```
 
-Start a GPU shell:
+Run validation:
 
 ```bash
-docker compose --profile gpu run --rm app-gpu
+docker compose run --rm test
 ```
 
-For portable CPU-first demos:
+Generate a demo replay:
 
 ```bash
-docker compose -f docker-compose.demo.yml build
-docker compose -f docker-compose.demo.yml run --rm test
-docker compose -f docker-compose.demo.yml run --rm train
-docker compose -f docker-compose.demo.yml up notebook
+docker compose run --rm demo
 ```
 
-More Docker and monitoring notes are in `DOCKER.md`.
+Start the tutorial notebook:
+
+```bash
+docker compose up notebook
+```
+
+Run GPU training:
+
+```bash
+docker compose --profile gpu up train-gpu
+```
+
+More Docker notes are in `DOCKER.md`.
 
 ## License
 
