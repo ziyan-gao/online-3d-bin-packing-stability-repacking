@@ -33,6 +33,7 @@ from packing.test_utils import (
 )
 from packing_env.data_type.buffer import Buffer
 from packing_env.data_type.geometry import Orthogonal3D
+from packing_env.data_type.oriented_block import OrientedBlock
 from packing_env.gym_env import PackingEnv
 
 
@@ -493,3 +494,37 @@ def test_cascaded_agent_predict_accepts_unbatched_env_observation():
 
     assert isinstance(action, int)
     assert obs["action_mask"].reshape(-1)[action]
+
+
+def test_cascaded_observation_masks_padded_ems_columns(monkeypatch):
+    box = Orthogonal3D(100, 100, 50)
+    env = PackingEnv(
+        k_placement=8,
+        buffer_capacity=3,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    real_ems = env.heu_ems.get_all_ems()[:1]
+    block = env.buffer.all_blocks[0]
+    oriented = OrientedBlock.from_block(
+        block,
+        source_index=0,
+        rotate_xy=False,
+    )
+    loading_rows = np.zeros((1, env.k_placement), dtype=bool)
+    loading_rows[0, 5] = True
+
+    monkeypatch.setattr(
+        env,
+        "get_cascaded_block_candidates",
+        lambda: ([oriented], real_ems, loading_rows),
+    )
+
+    obs = env.get_next_observation()
+
+    assert len(env.ems_list) == 1
+    assert not obs["action_mask"][:, 1:].any()
+    assert env.done

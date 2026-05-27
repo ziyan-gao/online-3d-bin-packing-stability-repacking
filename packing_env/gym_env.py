@@ -636,6 +636,7 @@ class PackingEnv(gym.Env):
             block_mask[idx] = True
         if visible_count > 0:
             loading_mask[:visible_count] = loading_rows[:visible_count]
+        loading_mask[:, len(ems_list) :] = False
 
         action_mask = loading_mask.copy()
         placable = bool(action_mask.any())
