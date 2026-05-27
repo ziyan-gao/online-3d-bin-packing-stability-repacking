@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from packing.train_utils import TrainConfig, load_training_checkpoint
+from packing.test_utils import DEFAULT_TEST_CONFIG, load_test_config
 
 
 def test_train_config_accepts_cascaded_policy_mode():
@@ -17,6 +18,12 @@ def test_train_config_accepts_cascaded_policy_mode():
 def test_train_config_rejects_unknown_policy_mode():
     with pytest.raises(ValueError, match="policy_mode"):
         TrainConfig(policy_mode="not_a_policy")
+
+
+def test_test_config_accepts_default_policy_mode():
+    config = load_test_config(DEFAULT_TEST_CONFIG)
+
+    assert config.policy_mode == "largest_block_baseline"
 
 
 def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):

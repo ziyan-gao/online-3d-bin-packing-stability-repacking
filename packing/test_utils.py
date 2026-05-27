@@ -39,6 +39,7 @@ class TestConfig:
     remove_inscribed_ems: bool = False
     stack_only: bool = False
     use_simple_blocks: bool = False
+    policy_mode: str = "largest_block_baseline"
     visualize: bool = False
     visual_dir: str = "outputs/three_live/mcts"
     visual_z_max: float = 610.0
