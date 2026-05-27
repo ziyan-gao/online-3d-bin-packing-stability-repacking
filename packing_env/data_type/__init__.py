@@ -18,6 +18,7 @@ from .geometry import (
 )
 from .item import Item, SimpleBlock
 from .maps import HeightMap, Map
+from .oriented_block import OrientedBlock
 from .support_vis import SupportVisData
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "Map",
     "Orthogonal2D",
     "Orthogonal3D",
+    "OrientedBlock",
     "Point2D",
     "Point3D",
     "RESOLUTION",
