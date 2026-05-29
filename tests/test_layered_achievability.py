@@ -153,6 +153,11 @@ def test_layered_selection_advances_exactly_one_stage(monkeypatch):
     env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
     raw_ems = EmptyMaximalSpace(Point3D(0, 0, 100), Orthogonal3D(300, 300, 100))
     monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+    monkeypatch.setattr(
+        env.buffer,
+        "_is_block_usable",
+        lambda block, ems_list, heu_stable, hm: bool(ems_list),
+    )
 
     block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
     env.buffer.simple_blocks = {block.box: [block]}

@@ -521,20 +521,10 @@ class PackingEnv(gym.Env):
         original_stage = self.layered_stage
         try:
             self.layered_stage = int(stage)
-            fallback: tuple[SimpleBlock, list[EmptyMaximalSpace]] | None = None
             for block in ranked_blocks:
                 ems_list = self._get_item_fit_ems_list([block])
                 if self.buffer._is_block_usable(block, ems_list, self.heu_stable, self.hm):
                     return block, ems_list
-                if (
-                    fallback is None
-                    and self.layered_achievability
-                    and int(stage) != original_stage
-                    and ems_list
-                ):
-                    fallback = (block, ems_list)
-            if fallback is not None:
-                return fallback
             return None, []
         finally:
             self.layered_stage = original_stage
