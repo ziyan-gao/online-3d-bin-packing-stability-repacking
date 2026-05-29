@@ -14,6 +14,8 @@ remove_inscribed_ems: false
 stack_only: false
 use_simple_blocks: false
 policy_mode: largest_block_baseline
+layered_achievability: false
+layered_num_chunks: 3
 visualize: false
 visual_dir: outputs/three_live/mcts
 visual_z_max: 610.0

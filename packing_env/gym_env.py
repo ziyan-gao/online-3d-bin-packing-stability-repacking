@@ -1,3 +1,4 @@
+from numbers import Integral
 from typing import List, Optional
 import numpy as np
 import gymnasium as gym
@@ -62,6 +63,10 @@ class PackingEnv(gym.Env):
             self.stack_only = True
             self.use_simple_blocks = True
         self.layered_achievability = bool(layered_achievability)
+        if isinstance(layered_num_chunks, bool) or not isinstance(
+            layered_num_chunks, Integral
+        ):
+            raise ValueError("layered_num_chunks must be a positive integer.")
         self.layered_num_chunks = int(layered_num_chunks)
         if self.layered_num_chunks <= 0:
             raise ValueError("layered_num_chunks must be a positive integer.")

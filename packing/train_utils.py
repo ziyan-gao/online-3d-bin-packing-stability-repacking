@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, fields
+from numbers import Integral
 from typing import TYPE_CHECKING
 
 import gymnasium as gym
@@ -13,7 +14,7 @@ from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
 from packing_env.data_type.data_sampler import DataSampler
-from packing.policy_loader import resolve_runtime_device
+from packing.policy_loader import CHECKPOINT_METADATA_DEFAULTS, resolve_runtime_device
 
 if TYPE_CHECKING:
     from tianshou.policy import PPOPolicy
@@ -62,8 +63,13 @@ class TrainConfig:
             object.__setattr__(self, "use_simple_blocks", True)
         if self.policy_mode == "cascaded_block_selector" and not self.stack_only:
             object.__setattr__(self, "stack_only", True)
-        if int(self.layered_num_chunks) <= 0:
+        if isinstance(self.layered_num_chunks, bool) or not isinstance(
+            self.layered_num_chunks, Integral
+        ):
             raise ValueError("layered_num_chunks must be a positive integer.")
+        if self.layered_num_chunks <= 0:
+            raise ValueError("layered_num_chunks must be a positive integer.")
+        object.__setattr__(self, "layered_num_chunks", int(self.layered_num_chunks))
 
 
 def load_train_config(config_path: str = DEFAULT_TRAIN_CONFIG) -> TrainConfig:
@@ -301,11 +307,7 @@ def load_training_checkpoint(
         )
 
     expected = training_checkpoint_metadata(config)
-    checkpoint_defaults = {
-        "stack_only": False,
-        "use_simple_blocks": False,
-        "policy_mode": "largest_block_baseline",
-    }
+    checkpoint_defaults = CHECKPOINT_METADATA_DEFAULTS
     mismatches = {
         key: (checkpoint.get(key, checkpoint_defaults.get(key)), value)
         for key, value in expected.items()

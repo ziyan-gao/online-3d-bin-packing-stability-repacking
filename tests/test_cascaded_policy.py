@@ -115,6 +115,11 @@ def test_train_config_rejects_non_positive_layered_num_chunks():
         TrainConfig(layered_num_chunks=0)
 
 
+def test_train_config_rejects_non_integer_layered_num_chunks():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        TrainConfig(layered_num_chunks=2.5)
+
+
 def test_training_checkpoint_metadata_includes_layered_achievability_fields():
     config = TrainConfig(
         use_simple_blocks=True,
@@ -182,6 +187,11 @@ def test_test_config_rejects_non_positive_layered_num_chunks():
         test_utils.TestConfig(layered_num_chunks=0)
 
 
+def test_test_config_rejects_non_integer_layered_num_chunks():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        test_utils.TestConfig(layered_num_chunks=2.5)
+
+
 def test_layered_achievability_constructor_initializes_state():
     env = PackingEnv(
         layered_achievability=True,
@@ -218,6 +228,16 @@ def test_layered_num_chunks_must_be_positive():
         PackingEnv(
             layered_achievability=True,
             layered_num_chunks=0,
+            use_simple_blocks=True,
+            policy_mode="largest_block_baseline",
+        )
+
+
+def test_layered_num_chunks_must_be_integer():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        PackingEnv(
+            layered_achievability=True,
+            layered_num_chunks=2.5,
             use_simple_blocks=True,
             policy_mode="largest_block_baseline",
         )
@@ -306,6 +326,52 @@ def test_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):
             config,
             "cpu",
         )
+
+
+def test_training_checkpoint_accepts_legacy_metadata_without_layered_fields(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint.pth"
+    torch.save(
+        {
+            "model": {},
+            "optim": {},
+            "epoch": 1,
+            "env_step": 2,
+            "gradient_step": 3,
+            "data_name": "random",
+            "container_size": (600, 600, 600),
+            "buffer_size": 12,
+            "k_placement": 80,
+            "remove_inscribed_ems": False,
+            "stack_only": True,
+            "use_simple_blocks": True,
+            "policy_mode": "largest_block_baseline",
+        },
+        checkpoint_path,
+    )
+
+    class DummyPolicy:
+        def load_state_dict(self, state):
+            self.state = state
+
+    class DummyOptim:
+        def load_state_dict(self, state):
+            self.state = state
+
+    config = TrainConfig(
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="largest_block_baseline",
+    )
+    checkpoint = load_training_checkpoint(
+        str(checkpoint_path),
+        DummyPolicy(),
+        DummyOptim(),
+        config,
+        "cpu",
+    )
+
+    assert "layered_achievability" not in checkpoint
+    assert "layered_num_chunks" not in checkpoint
 
 
 def test_policy_checkpoint_policy_mode_mismatch_is_rejected(tmp_path):

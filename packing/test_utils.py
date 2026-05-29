@@ -2,6 +2,7 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass, fields
+from numbers import Integral
 
 from omegaconf import OmegaConf
 
@@ -60,8 +61,13 @@ class TestConfig:
     optimize_sequence: bool = False
 
     def __post_init__(self) -> None:
-        if int(self.layered_num_chunks) <= 0:
+        if isinstance(self.layered_num_chunks, bool) or not isinstance(
+            self.layered_num_chunks, Integral
+        ):
             raise ValueError("layered_num_chunks must be a positive integer.")
+        if self.layered_num_chunks <= 0:
+            raise ValueError("layered_num_chunks must be a positive integer.")
+        object.__setattr__(self, "layered_num_chunks", int(self.layered_num_chunks))
 
 
 def load_test_config(config_path: str = DEFAULT_TEST_CONFIG) -> TestConfig:

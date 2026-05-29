@@ -14,6 +14,8 @@ CHECKPOINT_METADATA_DEFAULTS = {
     "stack_only": False,
     "use_simple_blocks": False,
     "policy_mode": "largest_block_baseline",
+    "layered_achievability": False,
+    "layered_num_chunks": 3,
 }
 
 
