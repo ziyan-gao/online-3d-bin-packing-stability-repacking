@@ -503,8 +503,10 @@ class PackingEnv(gym.Env):
             ranked_indices = ranked_indices[: self.k_placement]
         return [ems_list[int(idx)] for idx in ranked_indices]
 
-    def select_largest_policy_block(self) -> SimpleBlock | None:
-        """Select the largest block that is usable in its policy-visible EMS set."""
+    def _select_largest_policy_block_for_stage(
+        self,
+        stage: int,
+    ) -> tuple[SimpleBlock | None, list[EmptyMaximalSpace]]:
         ranked_blocks = sorted(
             self.buffer.all_blocks,
             key=lambda block: (
@@ -516,14 +518,55 @@ class PackingEnv(gym.Env):
             ),
             reverse=True,
         )
-        for block in ranked_blocks:
-            ems_list = self._get_item_fit_ems_list([block])
-            if self.buffer._is_block_usable(block, ems_list, self.heu_stable, self.hm):
-                self.buffer.simple_blocks = {block.box: [block]}
-                self.ems_list = ems_list
-                return block
-        self.buffer.simple_blocks = {}
-        return None
+        original_stage = self.layered_stage
+        try:
+            self.layered_stage = int(stage)
+            fallback: tuple[SimpleBlock, list[EmptyMaximalSpace]] | None = None
+            for block in ranked_blocks:
+                ems_list = self._get_item_fit_ems_list([block])
+                if self.buffer._is_block_usable(block, ems_list, self.heu_stable, self.hm):
+                    return block, ems_list
+                if (
+                    fallback is None
+                    and self.layered_achievability
+                    and int(stage) != original_stage
+                    and ems_list
+                ):
+                    fallback = (block, ems_list)
+            if fallback is not None:
+                return fallback
+            return None, []
+        finally:
+            self.layered_stage = original_stage
+
+    def select_largest_policy_block(self) -> SimpleBlock | None:
+        """Select the largest block that is usable in its policy-visible EMS set."""
+        if not self.layered_achievability:
+            block, ems_list = self._select_largest_policy_block_for_stage(self.layered_stage)
+            if block is None:
+                self.buffer.simple_blocks = {}
+                self.ems_list = []
+                return None
+            self.buffer.simple_blocks = {block.box: [block]}
+            self.ems_list = ems_list
+            return block
+
+        block, ems_list = self._select_largest_policy_block_for_stage(self.layered_stage)
+        if block is None and self.layered_stage < self.layered_num_chunks:
+            next_stage = self.layered_stage + 1
+            next_block, next_ems_list = self._select_largest_policy_block_for_stage(next_stage)
+            if next_block is not None:
+                self.layered_stage = next_stage
+                block, ems_list = next_block, next_ems_list
+
+        if block is None:
+            self.buffer.simple_blocks = {}
+            self.ems_list = []
+            return None
+
+        self.buffer.simple_blocks = {block.box: [block]}
+        self.ems_list = ems_list
+        return block
 
     @staticmethod
     def _build_cascaded_fit_mask(

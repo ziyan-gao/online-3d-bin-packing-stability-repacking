@@ -147,3 +147,37 @@ def test_pack_resolves_layered_policy_ems_to_raw_source(monkeypatch):
     env.pack(block.to_item(flb=policy_ems.FLB), selected_ems=policy_ems)
 
     assert captured["selected_ems"] is raw_ems
+
+
+def test_layered_selection_advances_exactly_one_stage(monkeypatch):
+    env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 100), Orthogonal3D(300, 300, 100))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {block.box: [block]}
+    env.layered_stage = 1
+
+    selected = env.select_largest_policy_block()
+
+    assert selected is block
+    assert env.layered_stage == 2
+
+
+def test_layered_selection_does_not_skip_multiple_stages(monkeypatch):
+    env = make_layered_env(
+        container_size=(300, 300, 400),
+        layered_num_chunks=4,
+    )
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 300), Orthogonal3D(300, 300, 100))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {block.box: [block]}
+    env.layered_stage = 1
+
+    selected = env.select_largest_policy_block()
+
+    assert selected is None
+    assert env.layered_stage == 1
+    assert env.buffer.all_blocks == []
