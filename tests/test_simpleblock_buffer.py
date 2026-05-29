@@ -47,6 +47,55 @@ class AlwaysStable:
         return [Point3D(0, 0, 0) for _ in candidates], np.ones(len(candidates), dtype=bool)
 
 
+class CountingStable:
+    def __init__(self, stable=True):
+        self.stable = bool(stable)
+        self.calls = []
+
+    def __call__(self, o3d, hm, candidates):
+        self.calls.append(o3d.to_dim_key())
+        if self.stable:
+            return [Point3D(0, 0, 0) for _ in candidates], np.ones(len(candidates), dtype=bool)
+        return [None for _ in candidates], np.zeros(len(candidates), dtype=bool)
+
+
+def test_unique_item_orientations_deduplicates_repeated_buffer_types():
+    from packing_env.heu_ems import EMS
+
+    orientations = EMS._unique_item_orientations(
+        [
+            Orthogonal3D(100, 100, 50),
+            Orthogonal3D(100, 100, 50),
+            Orthogonal3D(100, 200, 50),
+            Orthogonal3D(100, 200, 50),
+        ]
+    )
+
+    assert [orientation.to_dim_key() for orientation in orientations] == [
+        (100, 100, 50),
+        (100, 200, 50),
+        (200, 100, 50),
+    ]
+
+
+def test_prune_unstable_removes_ems_when_stability_fails():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    unstable = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(200, 200, 100))
+    ems_manager._EMS__ems_list = [unstable]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=CountingStable(stable=False),
+        item_types=[Orthogonal3D(100, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == []
+
+
 def test_simpleblock_dimensions_transpose_and_to_item():
     box = Orthogonal3D(100, 200, 50)
     block = SimpleBlock(box=box, stack_dims=(1, 1, 3), buffer_space=10)
