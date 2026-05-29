@@ -204,7 +204,7 @@ def test_layered_achievability_constructor_initializes_state():
     assert env.layered_achievability is True
     assert env.layered_num_chunks == 4
     assert env.layered_stage == 1
-    assert env._policy_ems_source_by_key == {}
+    assert env._policy_ems_source_by_id == {}
 
 
 def test_layered_achievability_requires_simple_block_baseline():

@@ -81,10 +81,7 @@ class PackingEnv(gym.Env):
                     "layered_achievability requires use_simple_blocks=True."
                 )
         self.layered_stage = 1
-        self._policy_ems_source_by_key: dict[
-            tuple[int, int, int, int, int, int],
-            EmptyMaximalSpace,
-        ] = {}
+        self._policy_ems_source_by_id: dict[int, EmptyMaximalSpace] = {}
         if self.item_buffer_space < 0:
             raise ValueError("item_buffer_space must be non-negative.")
         if self.item_buffer_space % self.hm.resolution != 0:
@@ -274,7 +271,7 @@ class PackingEnv(gym.Env):
     ) -> list[EmptyMaximalSpace]:
         z_min, z_max = self._layered_stage_window(stage)
         clipped: list[EmptyMaximalSpace] = []
-        source_by_key: dict[tuple[int, int, int, int, int, int], EmptyMaximalSpace] = {}
+        source_by_id: dict[int, EmptyMaximalSpace] = {}
         for raw in ems_list:
             raw_z0 = int(raw.FLB.z)
             raw_z1 = int(raw.FLB.z + raw.Dim.dz)
@@ -291,8 +288,8 @@ class PackingEnv(gym.Env):
                 ),
             )
             clipped.append(policy_ems)
-            source_by_key[self._ems_key(policy_ems)] = raw
-        self._policy_ems_source_by_key = source_by_key
+            source_by_id[id(policy_ems)] = raw
+        self._policy_ems_source_by_id = source_by_id
         return clipped
 
     def resolve_policy_ems_source(
@@ -301,8 +298,8 @@ class PackingEnv(gym.Env):
     ) -> EmptyMaximalSpace | None:
         if selected_ems is None:
             return None
-        return self._policy_ems_source_by_key.get(
-            self._ems_key(selected_ems),
+        return self._policy_ems_source_by_id.get(
+            id(selected_ems),
             selected_ems,
         )
 
@@ -1092,6 +1089,7 @@ class PackingEnv(gym.Env):
         self.hm.reset()
         self.heu_stable.reset()
         self.heu_ems.reset()
+        self._policy_ems_source_by_id = {}
         self.done = False
         
         obs = self.get_next_observation()

@@ -68,3 +68,25 @@ def test_clip_ems_truncates_discards_and_preserves_spaces():
     ]
     assert env.resolve_policy_ems_source(clipped[0]) is raw[0]
     assert env.resolve_policy_ems_source(clipped[1]) is raw[2]
+
+
+def test_clip_ems_preserves_sources_for_duplicate_clipped_geometry():
+    env = make_layered_env()
+    raw = [
+        EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300)),
+        EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 250)),
+    ]
+
+    clipped = env._clip_ems_to_layer_window(raw, stage=2)
+
+    assert [ems_tuple(ems) for ems in clipped] == [
+        (0, 0, 0, 300, 300, 200),
+        (0, 0, 0, 300, 300, 200),
+    ]
+    assert env.resolve_policy_ems_source(clipped[0]) is raw[0]
+    assert env.resolve_policy_ems_source(clipped[1]) is raw[1]
+    assert env._policy_ems_source_by_id
+
+    env.reset()
+
+    assert env._policy_ems_source_by_id == {}
