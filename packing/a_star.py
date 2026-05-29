@@ -280,6 +280,10 @@ class AStarNode:
             pruning_item_types = child_env._ems_pruning_item_types_after_holding_remove(
                 source_item
             )
+        elif source_item is None:
+            if child_env.buffer.has_items:
+                child_env.buffer.update(child_env.buffer.sample_item())
+            pruning_item_types = child_env._ems_pruning_item_types()
         child_env.pack(
             deepcopy(pack_op.packed_box),
             selected_ems=self._selected_ems_for_env(child_env, pack_op),

@@ -824,16 +824,6 @@ class PackingEnv(gym.Env):
             ]
         )
 
-    def _ems_pruning_item_types_after_buffer_update(self, source_item) -> list[Orthogonal3D]:
-        future_buffer = deepcopy(self.buffer)
-        future_buffer.update(source_item)
-        return self._dedupe_pruning_item_types(
-            [
-                *future_buffer.summary.keys(),
-                *(item.Dim for item in self.container.holding_list),
-            ]
-        )
-
     def _ems_pruning_item_types_after_holding_remove(self, source_item) -> list[Orthogonal3D]:
         skipped_source = False
         item_types = []
@@ -912,7 +902,11 @@ class PackingEnv(gym.Env):
         if selected_ems is not None:
             current_matches = [ems for ems in self.heu_ems.get_ems_list() if ems == selected_ems]
             selected_ems = current_matches[0] if current_matches else None
-        self.pack(repacked_box, selected_ems=selected_ems)
+        self.pack(
+            repacked_box,
+            selected_ems=selected_ems,
+            pruning_item_types=self._ems_pruning_item_types(),
+        )
         return repacked_box
 
     def unpack(self, box: Item) -> None:

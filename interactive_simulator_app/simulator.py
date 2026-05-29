@@ -374,13 +374,12 @@ class InteractivePackingSimulator:
         )
         placed_box.rot = bool(action["rotation"])
         selected_ems = self.env.ems_list[action["index"]]
-        pruning_item_types = self.env._ems_pruning_item_types_after_buffer_update(source_item)
+        self.env.buffer.update(source_item)
         self.env.pack(
             deepcopy(placed_box),
             selected_ems=selected_ems,
-            pruning_item_types=pruning_item_types,
+            pruning_item_types=self.env._ems_pruning_item_types(),
         )
-        self.env.buffer.update(source_item)
         self._apply_item_height_mode()
         self.env.validate_packing_state()
 
@@ -391,8 +390,10 @@ class InteractivePackingSimulator:
             buffer_space=self.env.item_buffer_space,
         )
         placed_box.rot = bool(candidate["rotation"])
-        pruning_item_types = self.env._ems_pruning_item_types_after_buffer_update(source_item)
-        self.env.pack(deepcopy(placed_box), pruning_item_types=pruning_item_types)
         self.env.buffer.update(source_item)
+        self.env.pack(
+            deepcopy(placed_box),
+            pruning_item_types=self.env._ems_pruning_item_types(),
+        )
         self._apply_item_height_mode()
         self.env.validate_packing_state()

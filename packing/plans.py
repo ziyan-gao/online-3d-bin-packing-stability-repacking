@@ -70,6 +70,10 @@ def _replay_pack(
     pruning_item_types = None
     if source_item is not None:
         pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(source_item)
+    elif source_item is None:
+        if replay_env.buffer.has_items:
+            replay_env.buffer.update(replay_env.buffer.sample_item())
+        pruning_item_types = replay_env._ems_pruning_item_types()
     replay_env.pack(
         deepcopy(packed_box),
         selected_ems=_selected_ems_for_env(replay_env, selected_ems),
@@ -107,6 +111,7 @@ def replay_execution_plan(
             replay_env.pack(
                 deepcopy(step.packed_box),
                 selected_ems=_selected_ems_for_env(replay_env, step.selected_ems),
+                pruning_item_types=replay_env._ems_pruning_item_types(),
             )
             _commit_replay_state(replay_env)
         elif isinstance(step, PackOperation):
@@ -149,6 +154,10 @@ def pack_precedence_keys(
             pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(
                 operation.source_item
             )
+        elif operation.source_item is None:
+            if replay_env.buffer.has_items:
+                replay_env.buffer.update(replay_env.buffer.sample_item())
+            pruning_item_types = replay_env._ems_pruning_item_types()
         replay_env.pack(
             deepcopy(operation.packed_box),
             selected_ems=operation.selected_ems,

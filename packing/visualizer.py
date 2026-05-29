@@ -208,6 +208,7 @@ class Visualizer:
                 replay_env.pack(
                     deepcopy(step.packed_box),
                     selected_ems=self._selected_ems_for_env(replay_env, step.selected_ems),
+                    pruning_item_types=replay_env._ems_pruning_item_types(),
                 )
                 replay_env.validate_packing_state()
                 title = f"{step_prefix} {idx}: Repack - seed {seed}"
@@ -220,10 +221,10 @@ class Visualizer:
                     pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(
                         step.source_item
                     )
-                elif replay_env.buffer.has_items:
-                    pruning_item_types = replay_env._ems_pruning_item_types_after_buffer_update(
-                        replay_env.buffer.sample_item()
-                    )
+                elif step.source_item is None:
+                    if replay_env.buffer.has_items:
+                        replay_env.buffer.update(replay_env.buffer.sample_item())
+                    pruning_item_types = replay_env._ems_pruning_item_types()
                 replay_env.pack(
                     deepcopy(step.packed_box),
                     selected_ems=self._selected_ems_for_env(replay_env, step.selected_ems),
@@ -231,8 +232,6 @@ class Visualizer:
                 )
                 if step.source_item is not None:
                     replay_env.remove_holding_item(step.source_item)
-                elif replay_env.buffer.has_items:
-                    replay_env.buffer.update(replay_env.buffer.sample_item())
                 replay_env.validate_packing_state()
                 title = f"{step_prefix} {idx}: Pack - seed {seed}"
                 self._emit_visual_state(replay_env, title, snapshots, push_live)

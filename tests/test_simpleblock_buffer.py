@@ -454,7 +454,7 @@ def test_pack_until_blocked_prunes_with_post_update_buffer_types(monkeypatch):
     assert env.buffer.summary == {second: 1}
 
 
-def test_mcts_rollout_passes_candidate_dims_to_pack(monkeypatch):
+def test_mcts_rollout_prunes_with_post_pack_candidate_dims(monkeypatch):
     incoming = Orthogonal3D(100, 100, 50)
     holding = Orthogonal3D(200, 100, 50)
     env = PackingEnv(
@@ -483,7 +483,7 @@ def test_mcts_rollout_passes_candidate_dims_to_pack(monkeypatch):
         Uti_requirement=0.0,
     )
 
-    assert [holding.to_dim_key(), incoming.to_dim_key()] in captured["item_types"]
+    assert [incoming.to_dim_key()] in captured["item_types"]
 
 
 def test_pack_until_blocked_handles_no_usable_simple_blocks():
