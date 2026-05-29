@@ -243,6 +243,69 @@ class PackingEnv(gym.Env):
                 ]
         return np.round(candidates, 4)
 
+    @staticmethod
+    def _ems_key(ems: EmptyMaximalSpace) -> tuple[int, int, int, int, int, int]:
+        return (
+            int(ems.FLB.x),
+            int(ems.FLB.y),
+            int(ems.FLB.z),
+            int(ems.Dim.dx),
+            int(ems.Dim.dy),
+            int(ems.Dim.dz),
+        )
+
+    def _layered_stage_window(self, stage: int | None = None) -> tuple[int, int]:
+        stage = self.layered_stage if stage is None else int(stage)
+        if stage < 1 or stage > self.layered_num_chunks:
+            raise ValueError(
+                f"layered stage must be in [1, {self.layered_num_chunks}], got {stage}"
+            )
+        height = int(self.container.dz)
+        z_min = 0 if stage == 1 else (stage - 2) * height // self.layered_num_chunks
+        z_max = stage * height // self.layered_num_chunks
+        if stage == self.layered_num_chunks:
+            z_max = height
+        return int(z_min), int(z_max)
+
+    def _clip_ems_to_layer_window(
+        self,
+        ems_list: list[EmptyMaximalSpace],
+        stage: int | None = None,
+    ) -> list[EmptyMaximalSpace]:
+        z_min, z_max = self._layered_stage_window(stage)
+        clipped: list[EmptyMaximalSpace] = []
+        source_by_key: dict[tuple[int, int, int, int, int, int], EmptyMaximalSpace] = {}
+        for raw in ems_list:
+            raw_z0 = int(raw.FLB.z)
+            raw_z1 = int(raw.FLB.z + raw.Dim.dz)
+            new_z0 = max(raw_z0, z_min)
+            new_z1 = min(raw_z1, z_max)
+            if new_z1 <= new_z0:
+                continue
+            policy_ems = EmptyMaximalSpace(
+                FLB=Point3D(int(raw.FLB.x), int(raw.FLB.y), int(new_z0)),
+                Dim=Orthogonal3D(
+                    int(raw.Dim.dx),
+                    int(raw.Dim.dy),
+                    int(new_z1 - new_z0),
+                ),
+            )
+            clipped.append(policy_ems)
+            source_by_key[self._ems_key(policy_ems)] = raw
+        self._policy_ems_source_by_key = source_by_key
+        return clipped
+
+    def resolve_policy_ems_source(
+        self,
+        selected_ems: EmptyMaximalSpace | None,
+    ) -> EmptyMaximalSpace | None:
+        if selected_ems is None:
+            return None
+        return self._policy_ems_source_by_key.get(
+            self._ems_key(selected_ems),
+            selected_ems,
+        )
+
     def _ems_can_fit_item(self, ems: EmptyMaximalSpace, item: Orthogonal3D | SimpleBlock) -> bool:
         dim = item.Dim if isinstance(item, SimpleBlock) else item
         buffer_space = item.buffer_space if isinstance(item, SimpleBlock) else self.item_buffer_space
