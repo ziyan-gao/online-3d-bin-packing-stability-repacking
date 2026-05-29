@@ -20,6 +20,7 @@ from packing.train_utils import (
     load_training_checkpoint,
     make_training_callbacks,
     select_training_device,
+    training_checkpoint_metadata,
 )
 from packing.visualizer import Visualizer
 import packing.test_utils as test_utils
@@ -107,6 +108,20 @@ def test_train_config_accepts_layered_achievability_fields():
 
     assert config.layered_achievability is True
     assert config.layered_num_chunks == 4
+
+
+def test_training_checkpoint_metadata_includes_layered_achievability_fields():
+    config = TrainConfig(
+        use_simple_blocks=True,
+        stack_only=True,
+        layered_achievability=True,
+        layered_num_chunks=4,
+    )
+
+    metadata = training_checkpoint_metadata(config)
+
+    assert metadata["layered_achievability"] is True
+    assert metadata["layered_num_chunks"] == 4
 
 
 def test_train_config_rejects_unknown_policy_mode():
@@ -429,7 +444,7 @@ def test_build_net_returns_cascaded_models_for_cascaded_policy_mode():
 
 
 def test_test_utils_build_env_propagates_cascaded_policy_mode():
-    config = SimpleNamespace(
+    config = test_utils.TestConfig(
         ds_name="random",
         container_size=(600, 600, 600),
         buffer_space=0,
@@ -442,6 +457,8 @@ def test_test_utils_build_env_propagates_cascaded_policy_mode():
     env = build_env(config, seed=1)
 
     assert env.policy_mode == "cascaded_block_selector"
+    assert env.layered_achievability is False
+    assert env.layered_num_chunks == 3
 
 
 def test_test_utils_build_agent_propagates_cascaded_policy_mode(monkeypatch):

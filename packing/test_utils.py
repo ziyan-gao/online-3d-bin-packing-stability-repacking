@@ -96,8 +96,8 @@ def build_env(config: TestConfig, seed: int) -> PackingEnv:
         stack_only=config.stack_only,
         use_simple_blocks=config.use_simple_blocks,
         policy_mode=config.policy_mode,
-        layered_achievability=getattr(config, "layered_achievability", False),
-        layered_num_chunks=getattr(config, "layered_num_chunks", 3),
+        layered_achievability=config.layered_achievability,
+        layered_num_chunks=config.layered_num_chunks,
     )
     env.reset(seed=seed)
     return env

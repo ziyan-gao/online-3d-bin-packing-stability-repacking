@@ -207,6 +207,8 @@ def training_checkpoint_metadata(config: TrainConfig) -> dict:
         "stack_only": config.stack_only,
         "use_simple_blocks": config.use_simple_blocks,
         "policy_mode": config.policy_mode,
+        "layered_achievability": config.layered_achievability,
+        "layered_num_chunks": config.layered_num_chunks,
     }
 
 
