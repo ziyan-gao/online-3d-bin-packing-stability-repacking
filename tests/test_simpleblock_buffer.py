@@ -97,6 +97,25 @@ def test_prune_unstable_removes_ems_when_stability_fails():
     assert ems_manager.get_all_ems() == []
 
 
+def test_prune_unstable_preserves_stable_inscribed_ems_when_enabled_off():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    outer = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    inner = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(200, 200, 100))
+    ems_manager._EMS__ems_list = [outer, inner]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(100, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [outer, inner]
+
+
 def test_simpleblock_dimensions_transpose_and_to_item():
     box = Orthogonal3D(100, 200, 50)
     block = SimpleBlock(box=box, stack_dims=(1, 1, 3), buffer_space=10)

@@ -10,7 +10,7 @@ target_util: 1
 max_steps: 300
 container_size: [1200, 1000, 1350]
 buffer_space: 0
-remove_inscribed_ems: true
+remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 policy_mode: cascaded_block_selector
