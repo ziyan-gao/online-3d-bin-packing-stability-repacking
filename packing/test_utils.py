@@ -287,8 +287,12 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
         selected_ems = env.resolve_policy_ems_source(
             env.ems_list[action_idx % env.k_placement]
         )
-        env.pack(box, selected_ems=selected_ems)
         env.buffer.update(item)
+        env.pack(
+            box,
+            selected_ems=selected_ems,
+            pruning_item_types=env._ems_pruning_item_types(),
+        )
         pack_history.append(record_pack_step(box, item, buffer_before, env))
         env.validate_packing_state()
         episode_reward = accumulate_step_reward(

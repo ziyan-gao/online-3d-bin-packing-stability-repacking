@@ -4,7 +4,7 @@ container_dx: 1200
 container_dy: 1000
 container_dz: 1350
 k_placement: 80
-remove_inscribed_ems: true
+remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 policy_mode: largest_block_baseline

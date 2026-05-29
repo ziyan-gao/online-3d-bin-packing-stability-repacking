@@ -947,11 +947,51 @@ class PackingEnv(gym.Env):
         self.buffer.update(source_item)
         selected_ems = self.resolve_policy_ems_source(selected_ems)
         self.heu_ems.update(box=placed_item, selected_ems=selected_ems, hm=self.hm)
+        self._prune_unstable_ems()
+
+    def _ems_pruning_item_types(self) -> list[Orthogonal3D]:
+        return self._dedupe_pruning_item_types(
+            [
+                *self.buffer.summary.keys(),
+                *(item.Dim for item in self.container.holding_list),
+            ]
+        )
+
+    def _ems_pruning_item_types_after_holding_remove(self, source_item) -> list[Orthogonal3D]:
+        skipped_source = False
+        item_types = []
+        for item in self.container.holding_list:
+            if not skipped_source and item == source_item:
+                skipped_source = True
+                continue
+            item_types.append(item.Dim)
+        return self._dedupe_pruning_item_types([*self.buffer.summary.keys(), *item_types])
+
+    @staticmethod
+    def _dedupe_pruning_item_types(item_types) -> list[Orthogonal3D]:
+        unique_item_types = []
+        seen = set()
+        for item_type in item_types:
+            key = item_type.to_dim_key()
+            if key not in seen:
+                unique_item_types.append(item_type)
+                seen.add(key)
+        return unique_item_types
+
+    def _prune_unstable_ems(self, item_types=None) -> None:
+        if item_types is None:
+            item_types = self._ems_pruning_item_types()
+        self.heu_ems.prune_unstable(
+            hm=self.hm,
+            feasibility_map=self.heu_stable,
+            item_types=item_types,
+        )
 
     def pack(
         self,
         box: Item,
         selected_ems: Optional[EmptyMaximalSpace] = None,
+        pruning_item_types=None,
     ) -> None:
         """Place an item and update placement state.
 
@@ -959,12 +999,20 @@ class PackingEnv(gym.Env):
             box: Item to place.
             selected_ems: EMS selected for the placement. If omitted, the EMS
                 manager resolves the containing EMS from the current EMS list.
+            pruning_item_types: Item dimensions to use when pruning unstable EMSs.
+                If omitted, current buffer and holding items are used, with the
+                placed box dimension added as a conservative fallback.
         """
         self.heu_stable.update(box=box, hm=self.hm)
         self.container.add(box=box)
         self.hm.update(box=box)
         selected_ems = self.resolve_policy_ems_source(selected_ems)
         self.heu_ems.update(box=box, selected_ems=selected_ems, hm=self.hm)
+        if pruning_item_types is None:
+            pruning_item_types = list(self._ems_pruning_item_types())
+            if box.Dim.to_dim_key() not in {item.to_dim_key() for item in pruning_item_types}:
+                pruning_item_types.append(box.Dim)
+        self._prune_unstable_ems(pruning_item_types)
 
     def repack(
         self,
@@ -988,7 +1036,11 @@ class PackingEnv(gym.Env):
         if selected_ems is not None:
             current_matches = [ems for ems in self.heu_ems.get_ems_list() if ems == selected_ems]
             selected_ems = current_matches[0] if current_matches else None
-        self.pack(repacked_box, selected_ems=selected_ems)
+        self.pack(
+            repacked_box,
+            selected_ems=selected_ems,
+            pruning_item_types=self._ems_pruning_item_types(),
+        )
         return repacked_box
 
     def unpack(self, box: Item) -> None:

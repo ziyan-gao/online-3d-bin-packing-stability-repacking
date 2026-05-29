@@ -72,8 +72,14 @@ def rollout(
             logits_deterministic=logits_deterministic,
         )
         selected_ems = env.ems_list[action_idx % env.k_placement]
+        post_pack_candidate_dims = list(candidate_dims)
+        post_pack_candidate_dims.pop(candidate_idx)
 
-        env.pack(packed_box, selected_ems=selected_ems)
+        env.pack(
+            packed_box,
+            selected_ems=selected_ems,
+            pruning_item_types=post_pack_candidate_dims,
+        )
         candidate_dims.pop(candidate_idx)
 
         selected_incoming_item = (

@@ -12,6 +12,7 @@ from packing_env.data_type.geometry import Orthogonal3D, Point3D
 from packing_env.data_type.item import Item, SimpleBlock
 from packing_env.gym_env import PackingEnv
 from packing import test_utils
+from packing.mcts import rollout
 
 
 class FakeSampler:
@@ -45,6 +46,74 @@ class FakeEms:
 class AlwaysStable:
     def __call__(self, o3d, hm, candidates):
         return [Point3D(0, 0, 0) for _ in candidates], np.ones(len(candidates), dtype=bool)
+
+
+class CountingStable:
+    def __init__(self, stable=True):
+        self.stable = bool(stable)
+        self.calls = []
+
+    def __call__(self, o3d, hm, candidates):
+        self.calls.append(o3d.to_dim_key())
+        if self.stable:
+            return [Point3D(0, 0, 0) for _ in candidates], np.ones(len(candidates), dtype=bool)
+        return [None for _ in candidates], np.zeros(len(candidates), dtype=bool)
+
+
+def test_unique_item_orientations_deduplicates_repeated_buffer_types():
+    from packing_env.heu_ems import EMS
+
+    orientations = EMS._unique_item_orientations(
+        [
+            Orthogonal3D(100, 100, 50),
+            Orthogonal3D(100, 100, 50),
+            Orthogonal3D(100, 200, 50),
+            Orthogonal3D(100, 200, 50),
+        ]
+    )
+
+    assert [orientation.to_dim_key() for orientation in orientations] == [
+        (100, 100, 50),
+        (100, 200, 50),
+        (200, 100, 50),
+    ]
+
+
+def test_prune_unstable_removes_ems_when_stability_fails():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    unstable = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(200, 200, 100))
+    ems_manager._EMS__ems_list = [unstable]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=CountingStable(stable=False),
+        item_types=[Orthogonal3D(100, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == []
+
+
+def test_prune_unstable_preserves_stable_inscribed_ems_when_enabled_off():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    outer = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    inner = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(200, 200, 100))
+    ems_manager._EMS__ems_list = [outer, inner]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(100, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [outer, inner]
 
 
 def test_simpleblock_dimensions_transpose_and_to_item():
@@ -167,6 +236,98 @@ def test_packing_env_stack_only_mode_places_simpleblock_as_item():
     assert done in (True, False)
 
 
+def test_step_prunes_ems_after_buffer_update(monkeypatch):
+    first = Orthogonal3D(100, 100, 50)
+    second = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=1,
+        data_sampler=FakeSampler([first, second, second]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    env.selected_item = env.buffer.sample_blocks()
+    env.candidates = np.array([[0, 0, 0, 600, 600, 600]], dtype=np.int32)
+    env.ems_list = env.heu_ems.get_all_ems()
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    box = env.selected_item.to_item(Point3D(0, 0, 0))
+
+    env._step(env.selected_item, box, env.ems_list[0])
+
+    assert captured["item_types"] == [second]
+    assert env.buffer.summary == {second: 1}
+
+
+def test_pack_prunes_ems_with_current_buffer_item_types(monkeypatch):
+    buffer_type = Orthogonal3D(100, 100, 50)
+    placed_type = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=2,
+        data_sampler=FakeSampler([buffer_type, buffer_type]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    selected_ems = env.heu_ems.get_all_ems()[0]
+    env.pack(Item(Point3D(0, 0, 0), placed_type), selected_ems=selected_ems)
+
+    assert captured["item_types"] == [buffer_type, placed_type]
+    assert env.buffer.summary == {buffer_type: 2}
+
+
+def test_pack_prunes_ems_with_holding_item_types(monkeypatch):
+    buffer_type = Orthogonal3D(100, 100, 50)
+    holding_type = Orthogonal3D(300, 100, 50)
+    placed_type = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=1,
+        data_sampler=FakeSampler([buffer_type]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    env.container.holding_list.append(Item(Point3D(0, 0, 0), holding_type))
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    selected_ems = env.heu_ems.get_all_ems()[0]
+    env.pack(Item(Point3D(0, 0, 0), placed_type), selected_ems=selected_ems)
+
+    assert captured["item_types"] == [buffer_type, holding_type, placed_type]
+
+
 def test_largest_block_baseline_observation_keeps_single_largest_stack():
     box = Orthogonal3D(100, 100, 50)
     env = PackingEnv(
@@ -277,6 +438,73 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
     assert len(env.buffer.buffer) == env.buffer.capacity
 
 
+def test_pack_until_blocked_prunes_with_post_update_buffer_types(monkeypatch):
+    first = Orthogonal3D(100, 100, 50)
+    second = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+    )
+    env.buffer = Buffer(capacity=1, data_sampler=FakeSampler([first, second]))
+    config = test_utils.TestConfig(max_steps=1, target_util=0.001)
+    captured = {}
+    original_pack = env.pack
+
+    def capture_pack(box, selected_ems=None, pruning_item_types=None):
+        captured["item_types"] = list(pruning_item_types)
+        return original_pack(
+            box,
+            selected_ems=selected_ems,
+            pruning_item_types=pruning_item_types,
+        )
+
+    monkeypatch.setattr(env, "pack", capture_pack)
+
+    test_utils.pack_until_blocked(
+        config,
+        env,
+        DeterministicPlacementAgent(),
+        seed=101,
+        visualizer=NoopVisualizer(),
+    )
+
+    assert captured["item_types"] == [second]
+    assert env.buffer.summary == {second: 1}
+
+
+def test_mcts_rollout_prunes_with_post_pack_candidate_dims(monkeypatch):
+    incoming = Orthogonal3D(100, 100, 50)
+    holding = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+    )
+    env.container.holding_list.append(Item(Point3D(0, 0, 0), holding))
+    captured = {"item_types": []}
+    original_pack = env.pack
+
+    def capture_pack(box, selected_ems=None, pruning_item_types=None):
+        captured["item_types"].append(list(pruning_item_types))
+        return original_pack(
+            box,
+            selected_ems=selected_ems,
+            pruning_item_types=pruning_item_types,
+        )
+
+    monkeypatch.setattr(env, "pack", capture_pack)
+
+    rollout(
+        env,
+        DeterministicPlacementAgent(),
+        incoming,
+        Uti_requirement=0.0,
+    )
+
+    assert [incoming.to_dim_key()] in captured["item_types"]
+
+
 def test_pack_until_blocked_handles_no_usable_simple_blocks():
     box = Orthogonal3D(700, 700, 700)
     env = PackingEnv(
@@ -356,6 +584,62 @@ def test_same_flb_dominated_ems_are_pruned():
     pruned = EMS._remove_same_flb_dominated([small, large, different_anchor])
 
     assert pruned == [large, different_anchor]
+
+
+def test_prune_unstable_removes_unsupported_ems_by_heightmap():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    supported = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 100, 100))
+    floating = EmptyMaximalSpace(Point3D(100, 0, 50), Orthogonal3D(100, 100, 100))
+    ems_manager._EMS__ems_list = [supported, floating]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(50, 50, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [supported]
+
+
+def test_prune_unstable_keeps_supported_stable_fitting_ems():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    usable = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 100, 100))
+    too_small = EmptyMaximalSpace(Point3D(100, 0, 0), Orthogonal3D(40, 40, 100))
+    ems_manager._EMS__ems_list = [usable, too_small]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(50, 50, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [usable]
+
+
+def test_prune_unstable_tests_rotated_item_orientation():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    rotated_fit = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 200, 100))
+    ems_manager._EMS__ems_list = [rotated_fit]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(200, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [rotated_fit]
 
 
 def test_item_fit_ems_ranking_prefers_low_z_then_large_volume():

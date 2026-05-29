@@ -1,5 +1,5 @@
 ds_name: CJ
-checkpoint: /home/gao/CJ_block_dockerize/outputs/model_cj/CJ/policy_step.pth
+checkpoint: outputs/train_outputs/baseline-blocks/policy_step.pth
 device:
 seed: 101
 num_sequences: 1

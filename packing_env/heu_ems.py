@@ -336,6 +336,69 @@ class EMS:
         return [space for space in spaces if EMS._supported_by_heightmap(space, hm)]
 
     @staticmethod
+    def _unique_item_orientations(
+        item_types: Iterable[Orthogonal3D],
+    ) -> list[Orthogonal3D]:
+        orientations: list[Orthogonal3D] = []
+        seen: set[tuple[int, int, int]] = set()
+        for item_type in item_types:
+            item = _to_o3d(item_type)
+            candidates = [item]
+            if item.dx != item.dy:
+                candidates.append(Orthogonal3D(item.dy, item.dx, item.dz))
+            for candidate in candidates:
+                key = candidate.to_dim_key()
+                if key in seen:
+                    continue
+                seen.add(key)
+                orientations.append(candidate)
+        return orientations
+
+    @staticmethod
+    def _has_stable_item_fit(
+        space: EmptyMaximalSpace,
+        hm: HeightMap,
+        feasibility_map,
+        item_orientations: Iterable[Orthogonal3D],
+    ) -> bool:
+        for item_dim in item_orientations:
+            if not space.include(item_dim):
+                continue
+            stable_placements, is_stable = feasibility_map(
+                o3d=item_dim,
+                hm=hm,
+                candidates=np.array([space.FLB.topix()]),
+            )
+            if (
+                len(stable_placements) > 0
+                and stable_placements[0] is not None
+                and stable_placements[0] == space.FLB
+                and bool(is_stable[0])
+            ):
+                return True
+        return False
+
+    def prune_unstable(
+        self,
+        hm: HeightMap,
+        feasibility_map,
+        item_types: Iterable[Orthogonal3D],
+    ) -> None:
+        item_orientations = self._unique_item_orientations(item_types)
+        if not item_orientations:
+            self.__ems_list = []
+            self._rebuild_index()
+            return
+
+        supported = self._remove_floating(self.__ems_list, hm)
+        self.__ems_list = [
+            space
+            for space in supported
+            if self._has_stable_item_fit(space, hm, feasibility_map, item_orientations)
+        ]
+        self._rebuild_index()
+
+    @staticmethod
     def _fmt_space(space: EmptyMaximalSpace) -> str:
         lo, hi = EMS._space_corners(space)
         return f"{tuple(lo.tolist())}->{tuple(hi.tolist())}"

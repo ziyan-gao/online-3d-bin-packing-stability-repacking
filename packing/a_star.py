@@ -163,7 +163,13 @@ class AStarNode:
             return None
 
         selected_ems = self._selected_ems_for_env(child_env, pack_op)
-        child_env.pack(deepcopy(pack_op.packed_box), selected_ems=selected_ems)
+        child_env.pack(
+            deepcopy(pack_op.packed_box),
+            selected_ems=selected_ems,
+            pruning_item_types=child_env._ems_pruning_item_types_after_holding_remove(
+                pack_op.source_item
+            ),
+        )
         child_env.remove_holding_item(pack_op.source_item)
         return self._make_child(
             child_env,
@@ -269,9 +275,19 @@ class AStarNode:
 
     def _pack_into_child_env(self, pack_op: PackOperation, source_item=None) -> PackingEnv:
         child_env = deepcopy(self.env)
+        pruning_item_types = None
+        if source_item is not None:
+            pruning_item_types = child_env._ems_pruning_item_types_after_holding_remove(
+                source_item
+            )
+        elif source_item is None:
+            if child_env.buffer.has_items:
+                child_env.buffer.update(child_env.buffer.sample_item())
+            pruning_item_types = child_env._ems_pruning_item_types()
         child_env.pack(
             deepcopy(pack_op.packed_box),
             selected_ems=self._selected_ems_for_env(child_env, pack_op),
+            pruning_item_types=pruning_item_types,
         )
         if source_item is not None:
             child_env.remove_holding_item(source_item)
