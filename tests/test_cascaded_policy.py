@@ -97,6 +97,18 @@ def test_train_config_accepts_cascaded_policy_mode():
     assert config.policy_mode == "cascaded_block_selector"
 
 
+def test_train_config_accepts_layered_achievability_fields():
+    config = TrainConfig(
+        use_simple_blocks=True,
+        stack_only=True,
+        layered_achievability=True,
+        layered_num_chunks=4,
+    )
+
+    assert config.layered_achievability is True
+    assert config.layered_num_chunks == 4
+
+
 def test_train_config_rejects_unknown_policy_mode():
     with pytest.raises(ValueError, match="policy_mode"):
         TrainConfig(policy_mode="not_a_policy")
@@ -131,6 +143,44 @@ def test_test_config_stores_cascaded_policy_mode():
     config = test_utils.TestConfig(policy_mode="cascaded_block_selector")
 
     assert config.policy_mode == "cascaded_block_selector"
+
+
+def test_test_config_accepts_layered_achievability_fields():
+    config = test_utils.TestConfig(
+        use_simple_blocks=True,
+        stack_only=True,
+        layered_achievability=True,
+        layered_num_chunks=5,
+    )
+
+    assert config.layered_achievability is True
+    assert config.layered_num_chunks == 5
+
+
+def test_layered_achievability_requires_simple_block_baseline():
+    with pytest.raises(ValueError, match="largest_block_baseline"):
+        PackingEnv(
+            layered_achievability=True,
+            use_simple_blocks=True,
+            policy_mode="cascaded_block_selector",
+        )
+
+    with pytest.raises(ValueError, match="use_simple_blocks"):
+        PackingEnv(
+            layered_achievability=True,
+            use_simple_blocks=False,
+            policy_mode="largest_block_baseline",
+        )
+
+
+def test_layered_num_chunks_must_be_positive():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        PackingEnv(
+            layered_achievability=True,
+            layered_num_chunks=0,
+            use_simple_blocks=True,
+            policy_mode="largest_block_baseline",
+        )
 
 
 def test_test_cj_default_uses_baseline_block_checkpoint():

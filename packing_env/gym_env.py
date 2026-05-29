@@ -26,6 +26,8 @@ class PackingEnv(gym.Env):
         stack_only: bool = False,
         use_simple_blocks: bool = False,
         policy_mode: str = "largest_block_baseline",
+        layered_achievability: bool = False,
+        layered_num_chunks: int = 3,
     ) -> None:
         """Initialize the packing environment.
         
@@ -59,6 +61,25 @@ class PackingEnv(gym.Env):
         if self.policy_mode == "cascaded_block_selector":
             self.stack_only = True
             self.use_simple_blocks = True
+        self.layered_achievability = bool(layered_achievability)
+        self.layered_num_chunks = int(layered_num_chunks)
+        if self.layered_num_chunks <= 0:
+            raise ValueError("layered_num_chunks must be a positive integer.")
+        if self.layered_achievability:
+            if self.policy_mode != "largest_block_baseline":
+                raise ValueError(
+                    "layered_achievability is supported only with "
+                    "policy_mode='largest_block_baseline'."
+                )
+            if not self.use_simple_blocks:
+                raise ValueError(
+                    "layered_achievability requires use_simple_blocks=True."
+                )
+        self.layered_stage = 1
+        self._policy_ems_source_by_key: dict[
+            tuple[int, int, int, int, int, int],
+            EmptyMaximalSpace,
+        ] = {}
         if self.item_buffer_space < 0:
             raise ValueError("item_buffer_space must be non-negative.")
         if self.item_buffer_space % self.hm.resolution != 0:

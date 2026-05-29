@@ -36,6 +36,8 @@ class TrainConfig:
     stack_only: bool = False
     use_simple_blocks: bool = False
     policy_mode: str = "largest_block_baseline"
+    layered_achievability: bool = False
+    layered_num_chunks: int = 3
     train_env_num: int = 64
     test_env_num: int = 32
     train_env_seed: int = 5
@@ -60,6 +62,8 @@ class TrainConfig:
             object.__setattr__(self, "use_simple_blocks", True)
         if self.policy_mode == "cascaded_block_selector" and not self.stack_only:
             object.__setattr__(self, "stack_only", True)
+        if int(self.layered_num_chunks) <= 0:
+            raise ValueError("layered_num_chunks must be a positive integer.")
 
 
 def load_train_config(config_path: str = DEFAULT_TRAIN_CONFIG) -> TrainConfig:
@@ -139,6 +143,8 @@ def make_envs(config: TrainConfig):
                 stack_only=config.stack_only,
                 use_simple_blocks=config.use_simple_blocks,
                 policy_mode=config.policy_mode,
+                layered_achievability=config.layered_achievability,
+                layered_num_chunks=config.layered_num_chunks,
             )
             for _ in range(config.train_env_num)
         ]
@@ -155,6 +161,8 @@ def make_envs(config: TrainConfig):
                 stack_only=config.stack_only,
                 use_simple_blocks=config.use_simple_blocks,
                 policy_mode=config.policy_mode,
+                layered_achievability=config.layered_achievability,
+                layered_num_chunks=config.layered_num_chunks,
             )
             for _ in range(config.test_env_num)
         ]
@@ -176,6 +184,8 @@ def make_single_env(config: TrainConfig):
         stack_only=config.stack_only,
         use_simple_blocks=config.use_simple_blocks,
         policy_mode=config.policy_mode,
+        layered_achievability=config.layered_achievability,
+        layered_num_chunks=config.layered_num_chunks,
     )
 
 

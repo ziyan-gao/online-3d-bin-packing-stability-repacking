@@ -40,6 +40,8 @@ class TestConfig:
     stack_only: bool = False
     use_simple_blocks: bool = False
     policy_mode: str = "largest_block_baseline"
+    layered_achievability: bool = False
+    layered_num_chunks: int = 3
     visualize: bool = False
     visual_dir: str = "outputs/three_live/mcts"
     visual_z_max: float = 610.0
@@ -94,6 +96,8 @@ def build_env(config: TestConfig, seed: int) -> PackingEnv:
         stack_only=config.stack_only,
         use_simple_blocks=config.use_simple_blocks,
         policy_mode=config.policy_mode,
+        layered_achievability=getattr(config, "layered_achievability", False),
+        layered_num_chunks=getattr(config, "layered_num_chunks", 3),
     )
     env.reset(seed=seed)
     return env

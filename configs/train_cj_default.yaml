@@ -8,6 +8,8 @@ remove_inscribed_ems: true
 stack_only: true
 use_simple_blocks: true
 policy_mode: largest_block_baseline
+layered_achievability: false
+layered_num_chunks: 3
 train_env_num: 64
 test_env_num: 32
 train_env_seed: 5
