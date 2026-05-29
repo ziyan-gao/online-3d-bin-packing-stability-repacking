@@ -24,6 +24,10 @@ def make_layered_env(**kwargs):
     return PackingEnv(**defaults)
 
 
+def make_layered_cascaded_env(**kwargs):
+    return make_layered_env(policy_mode="cascaded_block_selector", **kwargs)
+
+
 def ems_tuple(ems):
     return (
         int(ems.FLB.x),
@@ -236,3 +240,65 @@ def test_get_next_observation_uses_layered_selection(monkeypatch):
     assert env.selected_item is small
     assert env.ems_list[0].Dim.dz == 100
     assert obs["placable"] if "placable" in obs else obs["action_mask"].any()
+
+
+def test_cascaded_candidates_use_current_layer_clipped_ems(monkeypatch):
+    env = make_layered_cascaded_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    small = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    tall = SimpleBlock(box=Orthogonal3D(100, 100, 150), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {
+        small.box: [small],
+        tall.box: [tall],
+    }
+
+    oriented, ems_list, rows = env.get_cascaded_block_candidates()
+
+    assert oriented
+    assert rows.any()
+    assert ems_list[0].Dim.dz == 100
+    assert all(candidate.Dim.dz <= 100 for candidate in oriented)
+
+
+def test_cascaded_layered_candidates_advance_exactly_one_stage(monkeypatch):
+    env = make_layered_cascaded_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+    env.buffer.simple_blocks = {
+        Orthogonal3D(100, 100, 150): [
+            SimpleBlock(box=Orthogonal3D(100, 100, 150), stack_dims=(1, 1, 1))
+        ]
+    }
+    env.layered_stage = 1
+
+    oriented, ems_list, rows = env.get_cascaded_block_candidates()
+
+    assert oriented
+    assert rows.any()
+    assert env.layered_stage == 2
+    assert ems_list[0].FLB.z == 0
+    assert ems_list[0].Dim.dz == 200
+
+
+def test_cascaded_layered_candidates_do_not_skip_multiple_stages(monkeypatch):
+    env = make_layered_cascaded_env(
+        container_size=(300, 300, 400),
+        layered_num_chunks=4,
+    )
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 300), Orthogonal3D(300, 300, 100))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+    env.buffer.simple_blocks = {
+        Orthogonal3D(100, 100, 80): [
+            SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+        ]
+    }
+    env.layered_stage = 1
+
+    oriented, ems_list, rows = env.get_cascaded_block_candidates()
+
+    assert oriented == []
+    assert ems_list == []
+    assert not rows.any()
+    assert env.layered_stage == 1

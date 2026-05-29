@@ -638,7 +638,7 @@ class PackingEnv(gym.Env):
 
         return [stability_cache[key] for key in keys]
 
-    def get_cascaded_block_candidates(self):
+    def _build_cascaded_block_candidates(self):
         oriented_candidates = []
         mask_rows = []
         stability_cache = {}
@@ -696,6 +696,36 @@ class PackingEnv(gym.Env):
                 np.zeros((0, self.k_placement), dtype=bool),
             )
         return oriented_candidates, ems_list, np.asarray(mask_rows, dtype=bool)
+
+    def _get_cascaded_block_candidates_for_stage(
+        self,
+        stage: int,
+    ) -> tuple[list[OrientedBlock], list[EmptyMaximalSpace], np.ndarray]:
+        original_stage = self.layered_stage
+        try:
+            self.layered_stage = int(stage)
+            return self._build_cascaded_block_candidates()
+        finally:
+            self.layered_stage = original_stage
+
+    def get_cascaded_block_candidates(self):
+        if not self.layered_achievability:
+            return self._build_cascaded_block_candidates()
+
+        original_stage = self.layered_stage
+        result = self._get_cascaded_block_candidates_for_stage(original_stage)
+        if result[0]:
+            return result
+
+        if original_stage < self.layered_num_chunks:
+            next_stage = original_stage + 1
+            next_result = self._get_cascaded_block_candidates_for_stage(next_stage)
+            if next_result[0]:
+                self.layered_stage = next_stage
+                return next_result
+
+        self.layered_stage = original_stage
+        return result
 
     def _coerce_items(self, items) -> list[Orthogonal3D]:
         """Convert raw item dimensions or Orthogonal3D objects to a list."""
