@@ -117,3 +117,33 @@ def test_largest_policy_block_uses_current_layer_clipped_ems(monkeypatch):
     assert env.buffer.all_blocks == [small]
     assert len(env.ems_list) == 1
     assert env.ems_list[0].Dim.dz == 100
+
+
+def test_pack_resolves_layered_policy_ems_to_raw_source(monkeypatch):
+    env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    env.layered_stage = 1
+    block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    raw_ems = env.heu_ems.get_all_ems()[0]
+
+    env.get_pack_data(items=[block])
+    policy_ems = env.ems_list[0]
+    assert policy_ems is not raw_ems
+    assert policy_ems.Dim.dz == 100
+
+    captured = {}
+    original_update = env.heu_ems.update
+
+    def capture_update(*, box, selected_ems=None, hm=None, record_history=True):
+        captured["selected_ems"] = selected_ems
+        return original_update(
+            box=box,
+            selected_ems=selected_ems,
+            hm=hm,
+            record_history=record_history,
+        )
+
+    monkeypatch.setattr(env.heu_ems, "update", capture_update)
+
+    env.pack(block.to_item(flb=policy_ems.FLB), selected_ems=policy_ems)
+
+    assert captured["selected_ems"] is raw_ems

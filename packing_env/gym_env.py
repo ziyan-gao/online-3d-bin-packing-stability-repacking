@@ -930,6 +930,7 @@ class PackingEnv(gym.Env):
         self.heu_stable.update(box=box, hm=self.hm)
         self.container.add(box=box)
         self.hm.update(box=box)
+        selected_ems = self.resolve_policy_ems_source(selected_ems)
         self.heu_ems.update(box=box, selected_ems=selected_ems, hm=self.hm)
 
     def repack(
