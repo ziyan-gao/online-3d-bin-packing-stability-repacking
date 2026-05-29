@@ -358,6 +358,62 @@ def test_same_flb_dominated_ems_are_pruned():
     assert pruned == [large, different_anchor]
 
 
+def test_prune_unstable_removes_unsupported_ems_by_heightmap():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    supported = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 100, 100))
+    floating = EmptyMaximalSpace(Point3D(100, 0, 50), Orthogonal3D(100, 100, 100))
+    ems_manager._EMS__ems_list = [supported, floating]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(50, 50, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [supported]
+
+
+def test_prune_unstable_keeps_supported_stable_fitting_ems():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    usable = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 100, 100))
+    too_small = EmptyMaximalSpace(Point3D(100, 0, 0), Orthogonal3D(40, 40, 100))
+    ems_manager._EMS__ems_list = [usable, too_small]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(50, 50, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [usable]
+
+
+def test_prune_unstable_tests_rotated_item_orientation():
+    from packing_env.heu_ems import EMS
+
+    ems_manager = EMS(container=Orthogonal3D(300, 300, 300), remove_inscribed=False)
+    rotated_fit = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(100, 200, 100))
+    ems_manager._EMS__ems_list = [rotated_fit]
+    ems_manager._rebuild_index()
+
+    hm = PackingEnv(container_size=(300, 300, 300)).hm
+    ems_manager.prune_unstable(
+        hm=hm,
+        feasibility_map=AlwaysStable(),
+        item_types=[Orthogonal3D(200, 100, 50)],
+    )
+
+    assert ems_manager.get_all_ems() == [rotated_fit]
+
+
 def test_item_fit_ems_ranking_prefers_low_z_then_large_volume():
     env = PackingEnv(k_placement=2, container_size=(600, 600, 600))
     high_large = EmptyMaximalSpace(
