@@ -110,6 +110,11 @@ def test_train_config_accepts_layered_achievability_fields():
     assert config.layered_num_chunks == 4
 
 
+def test_train_config_rejects_non_positive_layered_num_chunks():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        TrainConfig(layered_num_chunks=0)
+
+
 def test_training_checkpoint_metadata_includes_layered_achievability_fields():
     config = TrainConfig(
         use_simple_blocks=True,
