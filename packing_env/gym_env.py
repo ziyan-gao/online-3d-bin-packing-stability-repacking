@@ -1018,7 +1018,7 @@ class PackingEnv(gym.Env):
         else:
             rot = False
         pos = self.candidates[idx][:3]
-        selected_ems = self.ems_list[idx]
+        selected_ems = self.resolve_policy_ems_source(self.ems_list[idx])
         return pos, rot, selected_ems
 
     def decode_cascaded_action(self, action: int) -> tuple[int, int, OrientedBlock, EmptyMaximalSpace]:

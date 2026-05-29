@@ -149,6 +149,32 @@ def test_pack_resolves_layered_policy_ems_to_raw_source(monkeypatch):
     assert captured["selected_ems"] is raw_ems
 
 
+def test_layered_step_updates_source_ems_for_clipped_selection(monkeypatch):
+    env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    env.selected_item = block
+    clipped_ems = env._clip_ems_to_layer_window([raw_ems], stage=1)
+    env.candidates = env.get_vectorized_ems(clipped_ems)
+    env.ems_list = clipped_ems
+
+    captured = {}
+
+    def fake_step(source_item, placed_item, selected_ems):
+        captured["source_item"] = source_item
+        captured["placed_item"] = placed_item
+        captured["selected_ems"] = selected_ems
+
+    monkeypatch.setattr(env, "_step", fake_step)
+    env.step(0)
+
+    assert captured["source_item"] is block
+    assert captured["placed_item"].FLB.z == 0
+    assert captured["selected_ems"] is raw_ems
+
+
 def test_layered_selection_advances_exactly_one_stage(monkeypatch):
     env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
     raw_ems = EmptyMaximalSpace(Point3D(0, 0, 100), Orthogonal3D(300, 300, 100))
