@@ -182,6 +182,21 @@ def test_test_config_rejects_non_positive_layered_num_chunks():
         test_utils.TestConfig(layered_num_chunks=0)
 
 
+def test_layered_achievability_constructor_initializes_state():
+    env = PackingEnv(
+        layered_achievability=True,
+        layered_num_chunks=4,
+        use_simple_blocks=True,
+        stack_only=True,
+        policy_mode="largest_block_baseline",
+    )
+
+    assert env.layered_achievability is True
+    assert env.layered_num_chunks == 4
+    assert env.layered_stage == 1
+    assert env._policy_ems_source_by_key == {}
+
+
 def test_layered_achievability_requires_simple_block_baseline():
     with pytest.raises(ValueError, match="largest_block_baseline"):
         PackingEnv(
