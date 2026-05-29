@@ -12,6 +12,7 @@ from packing_env.data_type.geometry import Orthogonal3D, Point3D
 from packing_env.data_type.item import Item, SimpleBlock
 from packing_env.gym_env import PackingEnv
 from packing import test_utils
+from packing.mcts import rollout
 
 
 class FakeSampler:
@@ -416,6 +417,73 @@ def test_pack_until_blocked_uses_largest_usable_simple_block():
     assert env.container.placed_items[0].Dim.raw().tolist() == [100, 100, 150]
     assert test_utils.contained_item_count(env) == 3
     assert len(env.buffer.buffer) == env.buffer.capacity
+
+
+def test_pack_until_blocked_prunes_with_post_update_buffer_types(monkeypatch):
+    first = Orthogonal3D(100, 100, 50)
+    second = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+    )
+    env.buffer = Buffer(capacity=1, data_sampler=FakeSampler([first, second]))
+    config = test_utils.TestConfig(max_steps=1, target_util=0.001)
+    captured = {}
+    original_pack = env.pack
+
+    def capture_pack(box, selected_ems=None, pruning_item_types=None):
+        captured["item_types"] = list(pruning_item_types)
+        return original_pack(
+            box,
+            selected_ems=selected_ems,
+            pruning_item_types=pruning_item_types,
+        )
+
+    monkeypatch.setattr(env, "pack", capture_pack)
+
+    test_utils.pack_until_blocked(
+        config,
+        env,
+        DeterministicPlacementAgent(),
+        seed=101,
+        visualizer=NoopVisualizer(),
+    )
+
+    assert captured["item_types"] == [second]
+    assert env.buffer.summary == {second: 1}
+
+
+def test_mcts_rollout_passes_candidate_dims_to_pack(monkeypatch):
+    incoming = Orthogonal3D(100, 100, 50)
+    holding = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+    )
+    env.container.holding_list.append(Item(Point3D(0, 0, 0), holding))
+    captured = {"item_types": []}
+    original_pack = env.pack
+
+    def capture_pack(box, selected_ems=None, pruning_item_types=None):
+        captured["item_types"].append(list(pruning_item_types))
+        return original_pack(
+            box,
+            selected_ems=selected_ems,
+            pruning_item_types=pruning_item_types,
+        )
+
+    monkeypatch.setattr(env, "pack", capture_pack)
+
+    rollout(
+        env,
+        DeterministicPlacementAgent(),
+        incoming,
+        Uti_requirement=0.0,
+    )
+
+    assert [holding.to_dim_key(), incoming.to_dim_key()] in captured["item_types"]
 
 
 def test_pack_until_blocked_handles_no_usable_simple_blocks():

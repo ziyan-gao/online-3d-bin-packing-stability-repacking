@@ -270,7 +270,12 @@ def pack_until_blocked(config: TestConfig, env: PackingEnv, agent, seed: int, vi
         else:
             visualizer.push(env, pack_title)
         reward = box.Dim.Volume / env.container.Volume
-        env.pack(box, selected_ems=env.ems_list[action_idx % env.k_placement])
+        pruning_item_types = env._ems_pruning_item_types_after_buffer_update(item)
+        env.pack(
+            box,
+            selected_ems=env.ems_list[action_idx % env.k_placement],
+            pruning_item_types=pruning_item_types,
+        )
         env.buffer.update(item)
         pack_history.append(record_pack_step(box, item, buffer_before, env))
         env.validate_packing_state()

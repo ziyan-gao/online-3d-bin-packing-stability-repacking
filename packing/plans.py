@@ -67,9 +67,13 @@ def _replay_pack(
     source_item: Item | None,
     selected_ems: EmptyMaximalSpace | None = None,
 ) -> None:
+    pruning_item_types = None
+    if source_item is not None:
+        pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(source_item)
     replay_env.pack(
         deepcopy(packed_box),
         selected_ems=_selected_ems_for_env(replay_env, selected_ems),
+        pruning_item_types=pruning_item_types,
     )
     if source_item is not None:
         replay_env.remove_holding_item(source_item)
@@ -140,7 +144,16 @@ def pack_precedence_keys(
 
     precedence_keys_by_pack_idx = {}
     for idx, operation in enumerate(plan.pack_sequence):
-        replay_env.pack(deepcopy(operation.packed_box), selected_ems=operation.selected_ems)
+        pruning_item_types = None
+        if operation.source_item is not None:
+            pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(
+                operation.source_item
+            )
+        replay_env.pack(
+            deepcopy(operation.packed_box),
+            selected_ems=operation.selected_ems,
+            pruning_item_types=pruning_item_types,
+        )
         placed_item = replay_env.container.find_matching_item(operation.packed_box)
         if placed_item is None:
             raise ValueError(f"Cannot find packed item in replay env: {operation.packed_box}")

@@ -215,9 +215,19 @@ class Visualizer:
                 continue
 
             if isinstance(step, PackOperation):
+                pruning_item_types = None
+                if step.source_item is not None:
+                    pruning_item_types = replay_env._ems_pruning_item_types_after_holding_remove(
+                        step.source_item
+                    )
+                elif replay_env.buffer.has_items:
+                    pruning_item_types = replay_env._ems_pruning_item_types_after_buffer_update(
+                        replay_env.buffer.sample_item()
+                    )
                 replay_env.pack(
                     deepcopy(step.packed_box),
                     selected_ems=self._selected_ems_for_env(replay_env, step.selected_ems),
+                    pruning_item_types=pruning_item_types,
                 )
                 if step.source_item is not None:
                     replay_env.remove_holding_item(step.source_item)
@@ -340,7 +350,10 @@ class Visualizer:
                         "selected_indices": selected_indices,
                     },
                 ))
-            replay_env.pack(box)
+            replay_env.pack(
+                box,
+                pruning_item_types=[Orthogonal3D(*dims) for dims in buffer_after],
+            )
             replay_env.buffer.buffer = [Orthogonal3D(*dims) for dims in buffer_after]
             if not start_from_blocked and buffer_before is None:
                 snapshots.append((

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import List, Optional
 import numpy as np
 import gymnasium as gym
@@ -816,19 +817,43 @@ class PackingEnv(gym.Env):
         self._prune_unstable_ems()
 
     def _ems_pruning_item_types(self) -> list[Orthogonal3D]:
+        return self._dedupe_pruning_item_types(
+            [
+                *self.buffer.summary.keys(),
+                *(item.Dim for item in self.container.holding_list),
+            ]
+        )
+
+    def _ems_pruning_item_types_after_buffer_update(self, source_item) -> list[Orthogonal3D]:
+        future_buffer = deepcopy(self.buffer)
+        future_buffer.update(source_item)
+        return self._dedupe_pruning_item_types(
+            [
+                *future_buffer.summary.keys(),
+                *(item.Dim for item in self.container.holding_list),
+            ]
+        )
+
+    def _ems_pruning_item_types_after_holding_remove(self, source_item) -> list[Orthogonal3D]:
+        skipped_source = False
         item_types = []
+        for item in self.container.holding_list:
+            if not skipped_source and item == source_item:
+                skipped_source = True
+                continue
+            item_types.append(item.Dim)
+        return self._dedupe_pruning_item_types([*self.buffer.summary.keys(), *item_types])
+
+    @staticmethod
+    def _dedupe_pruning_item_types(item_types) -> list[Orthogonal3D]:
+        unique_item_types = []
         seen = set()
-        for item_type in self.buffer.summary.keys():
+        for item_type in item_types:
             key = item_type.to_dim_key()
             if key not in seen:
-                item_types.append(item_type)
+                unique_item_types.append(item_type)
                 seen.add(key)
-        for item in self.container.holding_list:
-            key = item.Dim.to_dim_key()
-            if key not in seen:
-                item_types.append(item.Dim)
-                seen.add(key)
-        return item_types
+        return unique_item_types
 
     def _prune_unstable_ems(self, item_types=None) -> None:
         if item_types is None:

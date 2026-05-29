@@ -73,7 +73,11 @@ def rollout(
         )
         selected_ems = env.ems_list[action_idx % env.k_placement]
 
-        env.pack(packed_box, selected_ems=selected_ems)
+        env.pack(
+            packed_box,
+            selected_ems=selected_ems,
+            pruning_item_types=candidate_dims,
+        )
         candidate_dims.pop(candidate_idx)
 
         selected_incoming_item = (
