@@ -249,22 +249,21 @@ class PackingEnv(gym.Env):
         self,
         ems: EmptyMaximalSpace,
         items: list[Orthogonal3D | SimpleBlock],
+        stability_cache: dict | None = None,
     ) -> bool:
-        candidates = ems.FLB.topix()[None, :]
         for item in items:
             for dim, virtual_dim in self._item_orientations(item):
                 if not ems.include(virtual_dim):
                     continue
-                stable_placements, is_stable = self.heu_stable(
-                    o3d=dim,
-                    hm=self.hm,
-                    candidates=candidates,
-                )
+                stable_placement, is_stable = self._get_cached_stability(
+                    dim,
+                    [ems],
+                    stability_cache,
+                )[0]
                 if (
-                    len(is_stable) > 0
-                    and stable_placements[0] is not None
-                    and stable_placements[0] == ems.FLB
-                    and bool(is_stable[0])
+                    stable_placement is not None
+                    and stable_placement == ems.FLB
+                    and bool(is_stable)
                 ):
                     return True
         return False
@@ -274,11 +273,16 @@ class PackingEnv(gym.Env):
         ems_list: list[EmptyMaximalSpace],
         items: list[Orthogonal3D | SimpleBlock],
         prefer_stable: bool,
+        stability_cache: dict | None = None,
     ) -> list[EmptyMaximalSpace]:
         stable_cache = {}
         if prefer_stable:
             stable_cache = {
-                id(ems): self._ems_has_stable_fit(ems, items)
+                id(ems): self._ems_has_stable_fit(
+                    ems,
+                    items,
+                    stability_cache=stability_cache,
+                )
                 for ems in ems_list
             }
         return sorted(
@@ -310,6 +314,7 @@ class PackingEnv(gym.Env):
         *,
         cap: bool = True,
         prefer_stable: bool = False,
+        stability_cache: dict | None = None,
     ) -> List[EmptyMaximalSpace]:
         ems_list = self.heu_ems.get_all_ems()
         if items is None:
@@ -345,7 +350,12 @@ class PackingEnv(gym.Env):
         ]
         if cap:
             filtered = self._collapse_same_flb_ems(filtered)
-        filtered = self._rank_fit_ems(filtered, items, prefer_stable=prefer_stable)
+        filtered = self._rank_fit_ems(
+            filtered,
+            items,
+            prefer_stable=prefer_stable,
+            stability_cache=stability_cache,
+        )
         if self.k_placement <= 0:
             return []
         return filtered[: self.k_placement] if cap else filtered
@@ -415,12 +425,90 @@ class PackingEnv(gym.Env):
         self.buffer.simple_blocks = {}
         return None
 
+    @staticmethod
+    def _build_cascaded_fit_mask(
+        oriented_candidates: list[OrientedBlock],
+        ems_list: list[EmptyMaximalSpace],
+    ) -> np.ndarray:
+        if not oriented_candidates or not ems_list:
+            return np.zeros((len(oriented_candidates), len(ems_list)), dtype=bool)
+
+        ems_dims = np.array(
+            [[ems.Gdx, ems.Gdy, ems.Gdz] for ems in ems_list],
+            dtype=np.int64,
+        )
+        block_dims = np.array(
+            [
+                [
+                    oriented.Virtual_Dim.Gdx,
+                    oriented.Virtual_Dim.Gdy,
+                    oriented.Virtual_Dim.Gdz,
+                ]
+                for oriented in oriented_candidates
+            ],
+            dtype=np.int64,
+        )
+        return np.all(ems_dims[None, :, :] >= block_dims[:, None, :], axis=2)
+
+    def _get_cached_stability(
+        self,
+        dim: Orthogonal3D,
+        ems_list: list[EmptyMaximalSpace],
+        stability_cache: dict | None,
+    ) -> list[tuple[Point3D | None, bool]]:
+        if not ems_list:
+            return []
+
+        if stability_cache is None:
+            candidates = np.array([ems.FLB.topix() for ems in ems_list])
+            stable_placements, is_stable = self.heu_stable(
+                o3d=dim,
+                hm=self.hm,
+                candidates=candidates,
+            )
+            return [
+                (stable_placements[index], bool(is_stable[index]))
+                for index in range(len(ems_list))
+            ]
+
+        keys = [
+            (
+                dim.Gdx,
+                dim.Gdy,
+                ems.FLB.Gx,
+                ems.FLB.Gy,
+                ems.FLB.Gz,
+            )
+            for ems in ems_list
+        ]
+        missing_indices = [
+            index for index, key in enumerate(keys) if key not in stability_cache
+        ]
+        if missing_indices:
+            missing_candidates = np.array(
+                [ems_list[index].FLB.topix() for index in missing_indices]
+            )
+            stable_placements, is_stable = self.heu_stable(
+                o3d=dim,
+                hm=self.hm,
+                candidates=missing_candidates,
+            )
+            for local_index, ems_index in enumerate(missing_indices):
+                stability_cache[keys[ems_index]] = (
+                    stable_placements[local_index],
+                    bool(is_stable[local_index]),
+                )
+
+        return [stability_cache[key] for key in keys]
+
     def get_cascaded_block_candidates(self):
         oriented_candidates = []
         mask_rows = []
+        stability_cache = {}
         ems_list = self._get_item_fit_ems_list(
             self.buffer.all_blocks,
             prefer_stable=True,
+            stability_cache=stability_cache,
         )
 
         if not ems_list:
@@ -430,39 +518,39 @@ class PackingEnv(gym.Env):
                 np.zeros((0, self.k_placement), dtype=bool),
             )
 
-        lps = np.array([ems.FLB.topix() for ems in ems_list])
-        for source_index, block in enumerate(self.buffer.all_blocks):
-            for rotate_xy in (False, True):
-                oriented = OrientedBlock.from_block(
-                    block,
-                    source_index=source_index,
-                    rotate_xy=rotate_xy,
-                )
-                fit_mask = np.array(
-                    [ems.include(oriented.Virtual_Dim) for ems in ems_list],
-                    dtype=bool,
-                )
-                if not fit_mask.any():
-                    continue
+        all_oriented_candidates = [
+            OrientedBlock.from_block(
+                block,
+                source_index=source_index,
+                rotate_xy=rotate_xy,
+            )
+            for source_index, block in enumerate(self.buffer.all_blocks)
+            for rotate_xy in (False, True)
+        ]
+        fit_matrix = self._build_cascaded_fit_mask(all_oriented_candidates, ems_list)
+        for oriented, fit_mask in zip(all_oriented_candidates, fit_matrix):
+            if not fit_mask.any():
+                continue
 
-                stable_placements, is_stable = self.heu_stable(
-                    o3d=oriented.Dim,
-                    hm=self.hm,
-                    candidates=lps[fit_mask],
-                )
-                row = np.zeros((self.k_placement,), dtype=bool)
-                fit_indices = np.flatnonzero(fit_mask)
-                for local_index, ems_index in enumerate(fit_indices):
-                    stable_placement = stable_placements[local_index]
-                    if (
-                        bool(is_stable[local_index])
-                        and stable_placement is not None
-                        and stable_placement == ems_list[int(ems_index)].FLB
-                    ):
-                        row[int(ems_index)] = True
-                if row.any():
-                    oriented_candidates.append(oriented)
-                    mask_rows.append(row)
+            fit_indices = np.flatnonzero(fit_mask)
+            fit_ems = [ems_list[int(ems_index)] for ems_index in fit_indices]
+            stability = self._get_cached_stability(
+                oriented.Dim,
+                fit_ems,
+                stability_cache,
+            )
+            row = np.zeros((self.k_placement,), dtype=bool)
+            for local_index, ems_index in enumerate(fit_indices):
+                stable_placement, is_stable = stability[local_index]
+                if (
+                    bool(is_stable)
+                    and stable_placement is not None
+                    and stable_placement == ems_list[int(ems_index)].FLB
+                ):
+                    row[int(ems_index)] = True
+            if row.any():
+                oriented_candidates.append(oriented)
+                mask_rows.append(row)
 
         if not mask_rows:
             return (

@@ -5,7 +5,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from packing_env.data_type import OrientedBlock, Orthogonal3D, Point3D, SimpleBlock
+from packing_env.data_type import (
+    EmptyMaximalSpace,
+    OrientedBlock,
+    Orthogonal3D,
+    Point3D,
+    SimpleBlock,
+)
 from packing_env.data_type.buffer import Buffer
 from packing_env.gym_env import PackingEnv
 
@@ -84,6 +90,83 @@ def test_cascaded_candidates_expose_only_stable_oriented_blocks():
     assert loading_mask.shape == (len(candidates), env.k_placement)
     assert loading_mask.any(axis=1).all()
     assert all(candidate.consumed_count in (1, 2) for candidate in candidates)
+
+
+def test_cascaded_vectorized_fit_mask_matches_scalar_include_checks():
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    blocks = [
+        SimpleBlock(
+            box=Orthogonal3D(300, 100, 50),
+            stack_dims=(1, 1, 1),
+            buffer_space=10,
+        ),
+        SimpleBlock(
+            box=Orthogonal3D(160, 250, 80),
+            stack_dims=(1, 1, 1),
+            buffer_space=10,
+        ),
+    ]
+    oriented = [
+        OrientedBlock.from_block(block, source_index=index, rotate_xy=rotate_xy)
+        for index, block in enumerate(blocks)
+        for rotate_xy in (False, True)
+    ]
+    ems_list = [
+        EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(320, 120, 100)),
+        EmptyMaximalSpace(Point3D(0, 150, 0), Orthogonal3D(120, 320, 100)),
+        EmptyMaximalSpace(Point3D(200, 0, 0), Orthogonal3D(170, 260, 100)),
+        EmptyMaximalSpace(Point3D(0, 0, 100), Orthogonal3D(90, 90, 100)),
+    ]
+
+    expected = np.array(
+        [[ems.include(candidate.Virtual_Dim) for ems in ems_list] for candidate in oriented],
+        dtype=bool,
+    )
+
+    np.testing.assert_array_equal(
+        env._build_cascaded_fit_mask(oriented, ems_list),
+        expected,
+    )
+
+
+def test_cascaded_stability_cache_reuses_repeated_dim_ems_checks(monkeypatch):
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
+    env.reset(seed=1)
+    ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(400, 400, 100))
+    dim = Orthogonal3D(100, 100, 50)
+    taller_stack_dim = Orthogonal3D(100, 100, 150)
+    call_count = 0
+    original_heu_stable = env.heu_stable
+
+    def counting_heu_stable(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return original_heu_stable(*args, **kwargs)
+
+    monkeypatch.setattr(env, "heu_stable", counting_heu_stable)
+    cache = {}
+
+    first = env._get_cached_stability(dim, [ems], cache)
+    second = env._get_cached_stability(dim, [ems], cache)
+    third = env._get_cached_stability(taller_stack_dim, [ems], cache)
+
+    assert call_count == 1
+    assert first == second
+    assert first == third
 
 
 def test_cascaded_observation_contains_blocks_and_loading_mask():

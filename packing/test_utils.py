@@ -19,7 +19,7 @@ from packing.policy_loader import set_eval_seed
 from packing.visualizer import Visualizer
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_TEST_CONFIG = os.path.join(PROJECT_ROOT, "configs", "test_default.yaml")
+DEFAULT_TEST_CONFIG = os.path.join(PROJECT_ROOT, "configs", "test_cj_cascade.yaml")
 
 
 @dataclass(frozen=True)
