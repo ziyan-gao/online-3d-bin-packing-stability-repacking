@@ -15,7 +15,7 @@ stack_only: true
 use_simple_blocks: true
 policy_mode: largest_block_baseline
 layered_achievability: true
-layered_num_chunks: 4
+layered_num_chunks: 8
 visualize: false
 visual_dir: outputs/three_live/cj_policy
 visual_z_max: 1400.0

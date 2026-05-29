@@ -14,7 +14,7 @@ remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 policy_mode: cascaded_block_selector
-layered_achievability: false
+layered_achievability: true
 layered_num_chunks: 3
 visualize: false
 visual_dir: outputs/three_live/cj_cascade_policy

@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -302,3 +303,28 @@ def test_cascaded_layered_candidates_do_not_skip_multiple_stages(monkeypatch):
     assert ems_list == []
     assert not rows.any()
     assert env.layered_stage == 1
+
+
+def test_cascaded_step_resolves_layered_policy_ems_to_raw_source(monkeypatch):
+    env = make_layered_cascaded_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    block = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {block.box: [block]}
+    obs = env.get_cascaded_observation()
+    assert obs["action_mask"].any()
+
+    captured = {}
+
+    def capture_update(*, box, selected_ems=None, hm=None, record_history=True):
+        captured["selected_ems"] = selected_ems
+
+    monkeypatch.setattr(env.buffer, "update", lambda source_item: None)
+    monkeypatch.setattr(env.heu_ems, "update", capture_update)
+    monkeypatch.setattr(env, "_prune_unstable_ems", lambda item_types=None: None)
+    action = int(np.argwhere(obs["action_mask"])[0][1])
+
+    env.step(action)
+
+    assert captured["selected_ems"] is raw_ems
