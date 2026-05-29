@@ -1,5 +1,5 @@
 ds_name: CJ
-checkpoint: outputs/train_outputs/baseline-blocks/policy_step.pth
+checkpoint: /home/gao/CJ_block_dockerize/outputs/model_cj/CJ/policy_step.pth
 device:
 seed: 101
 num_sequences: 1
@@ -10,12 +10,12 @@ target_util: 1
 max_steps: 300
 container_size: [1200, 1000, 1350]
 buffer_space: 0
-remove_inscribed_ems: true
+remove_inscribed_ems: false
 stack_only: true
 use_simple_blocks: true
 policy_mode: largest_block_baseline
-layered_achievability: false
-layered_num_chunks: 3
+layered_achievability: true
+layered_num_chunks: 4
 visualize: false
 visual_dir: outputs/three_live/cj_policy
 visual_z_max: 1400.0
