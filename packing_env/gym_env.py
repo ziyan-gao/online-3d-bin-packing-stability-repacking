@@ -988,6 +988,7 @@ class PackingEnv(gym.Env):
             [
                 *self.buffer.summary.keys(),
                 *(item.Dim for item in self.container.holding_list),
+                *self._sampler_item_types(),
             ]
         )
 
@@ -999,7 +1000,18 @@ class PackingEnv(gym.Env):
                 skipped_source = True
                 continue
             item_types.append(item.Dim)
-        return self._dedupe_pruning_item_types([*self.buffer.summary.keys(), *item_types])
+        return self._dedupe_pruning_item_types(
+            [*self.buffer.summary.keys(), *item_types, *self._sampler_item_types()]
+        )
+
+    def _sampler_item_types(self) -> list[Orthogonal3D]:
+        item_types = []
+        for raw_item in getattr(self.buffer.data_sampler, "box_set", []):
+            if isinstance(raw_item, Orthogonal3D):
+                item_types.append(raw_item)
+            else:
+                item_types.append(Orthogonal3D(*map(int, raw_item)))
+        return item_types
 
     @staticmethod
     def _dedupe_pruning_item_types(item_types) -> list[Orthogonal3D]:

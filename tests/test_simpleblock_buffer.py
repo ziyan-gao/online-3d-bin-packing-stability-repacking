@@ -116,6 +116,28 @@ def test_prune_unstable_preserves_stable_inscribed_ems_when_enabled_off():
     assert ems_manager.get_all_ems() == [outer, inner]
 
 
+def test_env_pruning_keeps_ems_for_known_sampler_item_types():
+    current_big = Orthogonal3D(300, 300, 120)
+    future_small = Orthogonal3D(100, 100, 80)
+    sampler = FakeSampler([current_big])
+    sampler.box_set = [current_big.to_dim_key(), future_small.to_dim_key()]
+
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(400, 400, 400),
+    )
+    env.buffer = Buffer(capacity=1, data_sampler=sampler)
+    env.heu_stable = AlwaysStable()
+    future_space = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(150, 150, 100))
+    env.heu_ems._EMS__ems_list = [future_space]
+    env.heu_ems._rebuild_index()
+
+    env._prune_unstable_ems()
+
+    assert env.heu_ems.get_all_ems() == [future_space]
+
+
 def test_simpleblock_dimensions_transpose_and_to_item():
     box = Orthogonal3D(100, 200, 50)
     block = SimpleBlock(box=box, stack_dims=(1, 1, 3), buffer_space=10)
