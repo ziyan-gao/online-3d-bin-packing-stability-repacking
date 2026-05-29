@@ -207,14 +207,22 @@ def test_layered_achievability_constructor_initializes_state():
     assert env._policy_ems_source_by_id == {}
 
 
-def test_layered_achievability_requires_simple_block_baseline():
-    with pytest.raises(ValueError, match="largest_block_baseline"):
-        PackingEnv(
-            layered_achievability=True,
-            use_simple_blocks=True,
-            policy_mode="cascaded_block_selector",
-        )
+def test_layered_achievability_allows_cascaded_policy():
+    env = PackingEnv(
+        layered_achievability=True,
+        layered_num_chunks=4,
+        use_simple_blocks=True,
+        policy_mode="cascaded_block_selector",
+    )
 
+    assert env.layered_achievability is True
+    assert env.layered_num_chunks == 4
+    assert env.policy_mode == "cascaded_block_selector"
+    assert env.stack_only is True
+    assert env.use_simple_blocks is True
+
+
+def test_layered_achievability_requires_simple_blocks():
     with pytest.raises(ValueError, match="use_simple_blocks"):
         PackingEnv(
             layered_achievability=True,

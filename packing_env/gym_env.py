@@ -71,10 +71,14 @@ class PackingEnv(gym.Env):
         if self.layered_num_chunks <= 0:
             raise ValueError("layered_num_chunks must be a positive integer.")
         if self.layered_achievability:
-            if self.policy_mode != "largest_block_baseline":
+            if self.policy_mode not in {
+                "largest_block_baseline",
+                "cascaded_block_selector",
+            }:
                 raise ValueError(
                     "layered_achievability is supported only with "
-                    "policy_mode='largest_block_baseline'."
+                    "policy_mode='largest_block_baseline' or "
+                    "policy_mode='cascaded_block_selector'."
                 )
             if not self.use_simple_blocks:
                 raise ValueError(
