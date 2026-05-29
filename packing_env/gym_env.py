@@ -813,6 +813,14 @@ class PackingEnv(gym.Env):
         self.hm.update(box=placed_item)
         self.buffer.update(source_item)
         self.heu_ems.update(box=placed_item, selected_ems=selected_ems, hm=self.hm)
+        self._prune_unstable_ems()
+
+    def _prune_unstable_ems(self) -> None:
+        self.heu_ems.prune_unstable(
+            hm=self.hm,
+            feasibility_map=self.heu_stable,
+            item_types=self.buffer.summary.keys(),
+        )
 
     def pack(
         self,
@@ -830,6 +838,7 @@ class PackingEnv(gym.Env):
         self.container.add(box=box)
         self.hm.update(box=box)
         self.heu_ems.update(box=box, selected_ems=selected_ems, hm=self.hm)
+        self._prune_unstable_ems()
 
     def repack(
         self,

@@ -216,6 +216,67 @@ def test_packing_env_stack_only_mode_places_simpleblock_as_item():
     assert done in (True, False)
 
 
+def test_step_prunes_ems_after_buffer_update(monkeypatch):
+    first = Orthogonal3D(100, 100, 50)
+    second = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=1,
+        data_sampler=FakeSampler([first, second, second]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    env.selected_item = env.buffer.sample_blocks()
+    env.candidates = np.array([[0, 0, 0, 600, 600, 600]], dtype=np.int32)
+    env.ems_list = env.heu_ems.get_all_ems()
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    box = env.selected_item.to_item(Point3D(0, 0, 0))
+
+    env._step(env.selected_item, box, env.ems_list[0])
+
+    assert captured["item_types"] == [second]
+    assert env.buffer.summary == {second: 1}
+
+
+def test_pack_prunes_ems_with_current_buffer_item_types(monkeypatch):
+    box_type = Orthogonal3D(100, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=2,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=2,
+        data_sampler=FakeSampler([box_type, box_type]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    selected_ems = env.heu_ems.get_all_ems()[0]
+    env.pack(Item(Point3D(0, 0, 0), box_type), selected_ems=selected_ems)
+
+    assert captured["item_types"] == [box_type]
+    assert env.buffer.summary == {box_type: 2}
+
+
 def test_largest_block_baseline_observation_keeps_single_largest_stack():
     box = Orthogonal3D(100, 100, 50)
     env = PackingEnv(
