@@ -217,3 +217,22 @@ def test_layered_selection_does_not_skip_multiple_stages(monkeypatch):
     assert selected is None
     assert env.layered_stage == 1
     assert env.buffer.all_blocks == []
+
+
+def test_get_next_observation_uses_layered_selection(monkeypatch):
+    env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    raw_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [raw_ems])
+
+    small = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    tall = SimpleBlock(box=Orthogonal3D(100, 100, 150), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {
+        small.box: [small],
+        tall.box: [tall],
+    }
+
+    obs = env.get_next_observation()
+
+    assert env.selected_item is small
+    assert env.ems_list[0].Dim.dz == 100
+    assert obs["placable"] if "placable" in obs else obs["action_mask"].any()
