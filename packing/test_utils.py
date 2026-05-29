@@ -59,6 +59,10 @@ class TestConfig:
     mcts_max_child: int = 3
     optimize_sequence: bool = False
 
+    def __post_init__(self) -> None:
+        if int(self.layered_num_chunks) <= 0:
+            raise ValueError("layered_num_chunks must be a positive integer.")
+
 
 def load_test_config(config_path: str = DEFAULT_TEST_CONFIG) -> TestConfig:
     data = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)

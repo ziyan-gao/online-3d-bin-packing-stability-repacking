@@ -172,6 +172,11 @@ def test_test_config_accepts_layered_achievability_fields():
     assert config.layered_num_chunks == 5
 
 
+def test_test_config_rejects_non_positive_layered_num_chunks():
+    with pytest.raises(ValueError, match="layered_num_chunks"):
+        test_utils.TestConfig(layered_num_chunks=0)
+
+
 def test_layered_achievability_requires_simple_block_baseline():
     with pytest.raises(ValueError, match="largest_block_baseline"):
         PackingEnv(
