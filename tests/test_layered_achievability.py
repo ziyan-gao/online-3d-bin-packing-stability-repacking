@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from packing_env.data_type import EmptyMaximalSpace, Orthogonal3D, Point3D
+from packing_env.data_type import EmptyMaximalSpace, Orthogonal3D, Point3D, SimpleBlock
 from packing_env.gym_env import PackingEnv
 
 
@@ -87,6 +87,33 @@ def test_clip_ems_preserves_sources_for_duplicate_clipped_geometry():
     assert env.resolve_policy_ems_source(clipped[1]) is raw[1]
     assert env._policy_ems_source_by_id
 
+    old_policy_ids = set(env._policy_ems_source_by_id)
     env.reset()
 
-    assert env._policy_ems_source_by_id == {}
+    assert env._policy_ems_source_by_id
+    assert not old_policy_ids & set(env._policy_ems_source_by_id)
+    reset_sources = list(env._policy_ems_source_by_id.values())
+    reset_raw_ems = env.heu_ems.get_all_ems()
+    assert len(reset_sources) == len(reset_raw_ems)
+    assert all(source is raw for source, raw in zip(reset_sources, reset_raw_ems))
+
+
+def test_largest_policy_block_uses_current_layer_clipped_ems(monkeypatch):
+    env = make_layered_env(container_size=(300, 300, 300), layered_num_chunks=3)
+    env.layered_stage = 1
+    low_ems = EmptyMaximalSpace(Point3D(0, 0, 0), Orthogonal3D(300, 300, 300))
+    monkeypatch.setattr(env.heu_ems, "get_all_ems", lambda: [low_ems])
+
+    small = SimpleBlock(box=Orthogonal3D(100, 100, 80), stack_dims=(1, 1, 1))
+    tall = SimpleBlock(box=Orthogonal3D(100, 100, 150), stack_dims=(1, 1, 1))
+    env.buffer.simple_blocks = {
+        small.box: [small],
+        tall.box: [tall],
+    }
+
+    selected = env.select_largest_policy_block()
+
+    assert selected is small
+    assert env.buffer.all_blocks == [small]
+    assert len(env.ems_list) == 1
+    assert env.ems_list[0].Dim.dz == 100

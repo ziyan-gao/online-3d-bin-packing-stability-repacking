@@ -303,6 +303,19 @@ class PackingEnv(gym.Env):
             selected_ems,
         )
 
+    def _get_policy_ems_list(
+        self,
+        *,
+        stage: int | None = None,
+    ) -> list[EmptyMaximalSpace]:
+        raw_ems = self.heu_ems.get_all_ems()
+        if not self.layered_achievability:
+            self._policy_ems_source_by_id = {
+                id(ems): ems for ems in raw_ems
+            }
+            return raw_ems
+        return self._clip_ems_to_layer_window(raw_ems, stage=stage)
+
     def _ems_can_fit_item(self, ems: EmptyMaximalSpace, item: Orthogonal3D | SimpleBlock) -> bool:
         dim = item.Dim if isinstance(item, SimpleBlock) else item
         buffer_space = item.buffer_space if isinstance(item, SimpleBlock) else self.item_buffer_space
@@ -402,7 +415,7 @@ class PackingEnv(gym.Env):
         prefer_stable: bool = False,
         stability_cache: dict | None = None,
     ) -> List[EmptyMaximalSpace]:
-        ems_list = self.heu_ems.get_all_ems()
+        ems_list = self._get_policy_ems_list()
         if items is None:
             items = self.buffer.all_blocks if self.use_simple_blocks else self.buffer.items
         if isinstance(items, (Orthogonal3D, SimpleBlock)):
@@ -507,6 +520,7 @@ class PackingEnv(gym.Env):
             ems_list = self._get_item_fit_ems_list([block])
             if self.buffer._is_block_usable(block, ems_list, self.heu_stable, self.hm):
                 self.buffer.simple_blocks = {block.box: [block]}
+                self.ems_list = ems_list
                 return block
         self.buffer.simple_blocks = {}
         return None
@@ -898,6 +912,7 @@ class PackingEnv(gym.Env):
         self.container.add(box=placed_item)
         self.hm.update(box=placed_item)
         self.buffer.update(source_item)
+        selected_ems = self.resolve_policy_ems_source(selected_ems)
         self.heu_ems.update(box=placed_item, selected_ems=selected_ems, hm=self.hm)
 
     def pack(
