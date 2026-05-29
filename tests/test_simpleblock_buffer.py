@@ -250,7 +250,8 @@ def test_step_prunes_ems_after_buffer_update(monkeypatch):
 
 
 def test_pack_prunes_ems_with_current_buffer_item_types(monkeypatch):
-    box_type = Orthogonal3D(100, 100, 50)
+    buffer_type = Orthogonal3D(100, 100, 50)
+    placed_type = Orthogonal3D(200, 100, 50)
     env = PackingEnv(
         k_placement=4,
         buffer_capacity=2,
@@ -260,7 +261,7 @@ def test_pack_prunes_ems_with_current_buffer_item_types(monkeypatch):
     )
     env.buffer = Buffer(
         capacity=2,
-        data_sampler=FakeSampler([box_type, box_type]),
+        data_sampler=FakeSampler([buffer_type, buffer_type]),
         stack_only=True,
         container_size=(600, 600, 600),
     )
@@ -271,10 +272,40 @@ def test_pack_prunes_ems_with_current_buffer_item_types(monkeypatch):
 
     monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
     selected_ems = env.heu_ems.get_all_ems()[0]
-    env.pack(Item(Point3D(0, 0, 0), box_type), selected_ems=selected_ems)
+    env.pack(Item(Point3D(0, 0, 0), placed_type), selected_ems=selected_ems)
 
-    assert captured["item_types"] == [box_type]
-    assert env.buffer.summary == {box_type: 2}
+    assert captured["item_types"] == [buffer_type, placed_type]
+    assert env.buffer.summary == {buffer_type: 2}
+
+
+def test_pack_prunes_ems_with_holding_item_types(monkeypatch):
+    buffer_type = Orthogonal3D(100, 100, 50)
+    holding_type = Orthogonal3D(300, 100, 50)
+    placed_type = Orthogonal3D(200, 100, 50)
+    env = PackingEnv(
+        k_placement=4,
+        buffer_capacity=1,
+        container_size=(600, 600, 600),
+        stack_only=True,
+        use_simple_blocks=True,
+    )
+    env.buffer = Buffer(
+        capacity=1,
+        data_sampler=FakeSampler([buffer_type]),
+        stack_only=True,
+        container_size=(600, 600, 600),
+    )
+    env.container.holding_list.append(Item(Point3D(0, 0, 0), holding_type))
+    captured = {}
+
+    def capture_prune(hm, feasibility_map, item_types):
+        captured["item_types"] = list(item_types)
+
+    monkeypatch.setattr(env.heu_ems, "prune_unstable", capture_prune)
+    selected_ems = env.heu_ems.get_all_ems()[0]
+    env.pack(Item(Point3D(0, 0, 0), placed_type), selected_ems=selected_ems)
+
+    assert captured["item_types"] == [buffer_type, holding_type, placed_type]
 
 
 def test_largest_block_baseline_observation_keeps_single_largest_stack():
