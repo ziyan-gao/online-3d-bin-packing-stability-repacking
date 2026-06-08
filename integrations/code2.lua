@@ -159,6 +159,57 @@ function interpolateTaskPose4d(startTaskPose, targetTaskPose, fixedRoll, fixedPi
     }
 end
 
+function getJointPositions(joints)
+    local positions = {}
+    for i = 1, #joints, 1 do
+        positions[i] = sim.getJointPosition(joints[i])
+    end
+    return positions
+end
+
+function setJointPositions(joints, positions)
+    for i = 1, #joints, 1 do
+        sim.setJointPosition(joints[i], positions[i])
+    end
+end
+
+function solveIkForPose(targetPose)
+    simIK.setObjectPose(ikEnv,
+                        simToIkObjectMap[simTarget],
+                        targetPose,
+                        simToIkObjectMap[simBase])
+
+    local result = simIK.handleGroup(ikEnv, ikGroup_damped)
+    if result ~= simIK.result_success then
+        return false, nil, 'IK failed'
+    end
+
+    local targetAngles = {}
+    for i = 1, #simJoints, 1 do
+        local joint = simJoints[i]
+        targetAngles[i] = simIK.getJointPosition(ikEnv, simToIkObjectMap[joint])
+    end
+
+    return true, targetAngles, nil
+end
+
+function isConfigCollisionFree(targetAngles)
+    if not cartesianPlanner.collisionCollectionsReady or not robotCollection or not obstacleCollection then
+        return false, 'collision collections are not initialized'
+    end
+
+    local originalAngles = getJointPositions(simJoints)
+    setJointPositions(simJoints, targetAngles)
+    local collisionResult = sim.checkCollision(robotCollection, obstacleCollection)
+    setJointPositions(simJoints, originalAngles)
+
+    if collisionResult ~= 0 then
+        return false, 'candidate configuration is in collision'
+    end
+
+    return true, nil
+end
+
 function moveToPose(targetPose)
 -----------------------------------------------------------------------------
 --SP I:Using a threaded script to move the robot end-effector 
