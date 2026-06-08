@@ -5,6 +5,11 @@ sim.setStringSignal('armCommand', sim.packTable({
     linear = true,
 }))
 
+sim.setStringSignal('armCommand', sim.packTable({
+    move = true,
+    plannedCartesian = true,
+}))
+
 --]]
 
 sim=require'sim'
@@ -454,7 +459,9 @@ function sysCall_thread()
             local ok, cmd = pcall(sim.unpackTable, packed)
 
             if ok and cmd ~= nil and cmd.move then
-                if cmd.linear then
+                if cmd.plannedCartesian then
+                    moveToPlannedCartesian()
+                elseif cmd.linear then
                     moveTo('linear')
                 else
                     moveTo('config')
