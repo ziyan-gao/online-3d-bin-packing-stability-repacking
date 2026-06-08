@@ -355,6 +355,34 @@ function generateCartesianWaypoints()
     return finish(true, waypoints, configs, nil)
 end
 
+function executeCartesianWaypointConfigs(configs)
+    for i = 1, #configs, 1 do
+        local params = {
+            joints = simJoints,
+            targetPos = configs[i],
+            maxVel = maxVel,
+            maxAccel = maxAccel,
+            maxJerk = maxJerk,
+        }
+        sim.moveToConfig(params)
+    end
+end
+
+function moveToPlannedCartesian()
+    local originalAngles = getJointPositions(simJoints)
+    local ok, waypoints, configs, err = generateCartesianWaypoints()
+    setJointPositions(simJoints, originalAngles)
+
+    if not ok then
+        sim.addLog(sim.verbosity_warnings, 'Cartesian waypoint planning failed: ' .. err)
+        return false
+    end
+
+    executeCartesianWaypointConfigs(configs)
+    sim.addLog(sim.verbosity_scriptinfos, 'Executed ' .. #waypoints .. ' planned Cartesian waypoints')
+    return true
+end
+
 function moveToPose(targetPose)
 -----------------------------------------------------------------------------
 --SP I:Using a threaded script to move the robot end-effector 
