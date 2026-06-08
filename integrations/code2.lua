@@ -175,25 +175,8 @@ end
 
 function syncIkEnvironmentFromSim()
     if simIK.syncFromSim then
-        local ikObjects = {}
-        local function addIkObject(simObject)
-            local ikObject = simToIkObjectMap[simObject]
-            if ikObject then
-                ikObjects[#ikObjects + 1] = ikObject
-            end
-        end
-
-        addIkObject(simBase)
-        addIkObject(simTip)
-        addIkObject(simTarget)
-        for i = 1, #simJoints, 1 do
-            addIkObject(simJoints[i])
-        end
-
-        local ok = pcall(simIK.syncFromSim, ikEnv, ikObjects)
-        if ok then
-            return
-        end
+        simIK.syncFromSim(ikEnv, {ikGroup_damped})
+        return
     end
 
     for i = 1, #simJoints, 1 do
