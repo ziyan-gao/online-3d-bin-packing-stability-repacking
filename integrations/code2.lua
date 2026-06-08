@@ -106,6 +106,7 @@ function sysCall_init()
     cartesianPlanner.minSteps = 2
     cartesianPlanner.maxSteps = 200
     cartesianPlanner.jointSegmentStep = math.rad(5)
+    cartesianPlanner.maxJointSegmentSamples = 100
     cartesianPlanner.robotRootAlias = '/mobile_arm'
     cartesianPlanner.obstacleRootAliases = {'/ZeroPressureBelt', '/Pallet'}
     cartesianPlanner.cuboidAliasPrefix = '/Cuboid'
@@ -259,11 +260,17 @@ function computeJointSegmentSampleCount(startAngles, targetAngles)
     if samples < 1 then
         samples = 1
     end
-    return samples
+    if samples > cartesianPlanner.maxJointSegmentSamples then
+        return nil, 'joint segment sample count exceeds limit'
+    end
+    return samples, nil
 end
 
 function validateJointSegmentCollisionFree(startAngles, targetAngles)
-    local samples = computeJointSegmentSampleCount(startAngles, targetAngles)
+    local samples, sampleError = computeJointSegmentSampleCount(startAngles, targetAngles)
+    if not samples then
+        return false, sampleError
+    end
     for sampleIndex = 1, samples, 1 do
         local t = sampleIndex / samples
         local sampleAngles = interpolateJointConfig(startAngles, targetAngles, t)
@@ -302,7 +309,8 @@ function generateCartesianWaypoints()
     if not isPositiveFiniteNumber(cartesianPlanner.stepSize) or
        not isPositiveFiniteNumber(cartesianPlanner.minSteps) or
        not isPositiveFiniteNumber(cartesianPlanner.maxSteps) or
-       not isPositiveFiniteNumber(cartesianPlanner.jointSegmentStep) then
+       not isPositiveFiniteNumber(cartesianPlanner.jointSegmentStep) or
+       not isPositiveFiniteNumber(cartesianPlanner.maxJointSegmentSamples) then
         return finish(false, nil, nil, 'invalid Cartesian planner step configuration')
     end
 
