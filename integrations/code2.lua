@@ -117,6 +117,48 @@ function sysCall_init()
 end
 
 
+function normalizeAngle(angle)
+    while angle > math.pi do
+        angle = angle - 2 * math.pi
+    end
+    while angle < -math.pi do
+        angle = angle + 2 * math.pi
+    end
+    return angle
+end
+
+function interpolateAngle(startAngle, targetAngle, t)
+    return startAngle + normalizeAngle(targetAngle - startAngle) * t
+end
+
+function poseToTaskPose4d(pose)
+    local matrix = sim.poseToMatrix(pose)
+    local euler = sim.getEulerAnglesFromMatrix(matrix)
+    return {
+        x = pose[1],
+        y = pose[2],
+        z = pose[3],
+        roll = euler[1],
+        pitch = euler[2],
+        yaw = euler[3],
+    }
+end
+
+function taskPose4dToPose(taskPose, fixedRoll, fixedPitch, baseHandle)
+    return sim.buildPose({taskPose.x, taskPose.y, taskPose.z}, {fixedRoll, fixedPitch, taskPose.yaw})
+end
+
+function interpolateTaskPose4d(startTaskPose, targetTaskPose, fixedRoll, fixedPitch, t)
+    return {
+        x = startTaskPose.x + (targetTaskPose.x - startTaskPose.x) * t,
+        y = startTaskPose.y + (targetTaskPose.y - startTaskPose.y) * t,
+        z = startTaskPose.z + (targetTaskPose.z - startTaskPose.z) * t,
+        roll = fixedRoll,
+        pitch = fixedPitch,
+        yaw = interpolateAngle(startTaskPose.yaw, targetTaskPose.yaw, t),
+    }
+end
+
 function moveToPose(targetPose)
 -----------------------------------------------------------------------------
 --SP I:Using a threaded script to move the robot end-effector 
