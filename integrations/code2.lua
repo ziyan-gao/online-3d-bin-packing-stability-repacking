@@ -232,6 +232,51 @@ function isConfigCollisionFree(targetAngles)
     return true, nil
 end
 
+function computeWaypointStepCount(startTaskPose, targetTaskPose)
+    local dx = targetTaskPose.x - startTaskPose.x
+    local dy = targetTaskPose.y - startTaskPose.y
+    local dz = targetTaskPose.z - startTaskPose.z
+    local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+    local steps = math.ceil(distance / cartesianPlanner.stepSize)
+    if steps < cartesianPlanner.minSteps then
+        steps = cartesianPlanner.minSteps
+    end
+    return steps
+end
+
+function generateCartesianWaypoints()
+    local startPose = sim.getObjectPose(ik_data.tip, ik_data.base)
+    local targetPose = sim.getObjectPose(arm_target_handle, ik_data.base)
+    local startTaskPose = poseToTaskPose4d(startPose)
+    local targetTaskPose = poseToTaskPose4d(targetPose)
+    local fixedRoll = startTaskPose.roll
+    local fixedPitch = startTaskPose.pitch
+    local steps = computeWaypointStepCount(startTaskPose, targetTaskPose)
+
+    local waypoints = {}
+    local configs = {}
+
+    for i = 1, steps, 1 do
+        local t = i / steps
+        local taskPose = interpolateTaskPose4d(startTaskPose, targetTaskPose, fixedRoll, fixedPitch, t)
+        local pose = taskPose4dToPose(taskPose, fixedRoll, fixedPitch, ik_data.base)
+        local ikOk, targetAngles, ikError = solveIkForPose(pose)
+        if not ikOk then
+            return false, nil, nil, 'waypoint ' .. i .. ': ' .. ikError
+        end
+
+        local collisionOk, collisionError = isConfigCollisionFree(targetAngles)
+        if not collisionOk then
+            return false, nil, nil, 'waypoint ' .. i .. ': ' .. collisionError
+        end
+
+        waypoints[i] = taskPose
+        configs[i] = targetAngles
+    end
+
+    return true, waypoints, configs, nil
+end
+
 function moveToPose(targetPose)
 -----------------------------------------------------------------------------
 --SP I:Using a threaded script to move the robot end-effector 
