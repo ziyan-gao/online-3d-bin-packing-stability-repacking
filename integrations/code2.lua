@@ -366,6 +366,7 @@ function executeCartesianWaypointConfigs(configs)
         }
         sim.moveToConfig(params)
     end
+    syncIkEnvironmentFromSim()
 end
 
 function moveToPlannedCartesian()
