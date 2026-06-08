@@ -238,13 +238,31 @@ function computeWaypointStepCount(startTaskPose, targetTaskPose)
     local dz = targetTaskPose.z - startTaskPose.z
     local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
     local steps = math.ceil(distance / cartesianPlanner.stepSize)
-    if steps < cartesianPlanner.minSteps then
-        steps = cartesianPlanner.minSteps
+    local minSteps = math.ceil(cartesianPlanner.minSteps)
+    if steps < minSteps then
+        steps = minSteps
+    end
+    if steps ~= steps or steps < 1 then
+        steps = 1
     end
     return steps
 end
 
 function generateCartesianWaypoints()
+    local originalAngles = getJointPositions(simJoints)
+    local function finish(ok, waypoints, configs, errorMessage)
+        setJointPositions(simJoints, originalAngles)
+        syncIkEnvironmentFromSim()
+        return ok, waypoints, configs, errorMessage
+    end
+
+    if type(cartesianPlanner.stepSize) ~= 'number' or cartesianPlanner.stepSize <= 0 or
+       cartesianPlanner.stepSize ~= cartesianPlanner.stepSize or
+       type(cartesianPlanner.minSteps) ~= 'number' or cartesianPlanner.minSteps <= 0 or
+       cartesianPlanner.minSteps ~= cartesianPlanner.minSteps then
+        return finish(false, nil, nil, 'invalid Cartesian planner step configuration')
+    end
+
     local startPose = sim.getObjectPose(ik_data.tip, ik_data.base)
     local targetPose = sim.getObjectPose(arm_target_handle, ik_data.base)
     local startTaskPose = poseToTaskPose4d(startPose)
@@ -262,19 +280,20 @@ function generateCartesianWaypoints()
         local pose = taskPose4dToPose(taskPose, fixedRoll, fixedPitch, ik_data.base)
         local ikOk, targetAngles, ikError = solveIkForPose(pose)
         if not ikOk then
-            return false, nil, nil, 'waypoint ' .. i .. ': ' .. ikError
+            return finish(false, nil, nil, 'waypoint ' .. i .. ': ' .. ikError)
         end
 
         local collisionOk, collisionError = isConfigCollisionFree(targetAngles)
         if not collisionOk then
-            return false, nil, nil, 'waypoint ' .. i .. ': ' .. collisionError
+            return finish(false, nil, nil, 'waypoint ' .. i .. ': ' .. collisionError)
         end
 
         waypoints[i] = taskPose
         configs[i] = targetAngles
+        setJointPositions(simJoints, targetAngles)
     end
 
-    return true, waypoints, configs, nil
+    return finish(true, waypoints, configs, nil)
 end
 
 function moveToPose(targetPose)
