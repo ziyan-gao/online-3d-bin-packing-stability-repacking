@@ -173,7 +173,40 @@ function setJointPositions(joints, positions)
     end
 end
 
+function syncIkEnvironmentFromSim()
+    if simIK.syncFromSim then
+        local ikObjects = {}
+        local function addIkObject(simObject)
+            local ikObject = simToIkObjectMap[simObject]
+            if ikObject then
+                ikObjects[#ikObjects + 1] = ikObject
+            end
+        end
+
+        addIkObject(simBase)
+        addIkObject(simTip)
+        addIkObject(simTarget)
+        for i = 1, #simJoints, 1 do
+            addIkObject(simJoints[i])
+        end
+
+        local ok = pcall(simIK.syncFromSim, ikEnv, ikObjects)
+        if ok then
+            return
+        end
+    end
+
+    for i = 1, #simJoints, 1 do
+        local joint = simJoints[i]
+        simIK.setJointPosition(ikEnv,
+                               simToIkObjectMap[joint],
+                               sim.getJointPosition(joint))
+    end
+end
+
 function solveIkForPose(targetPose)
+    syncIkEnvironmentFromSim()
+
     simIK.setObjectPose(ikEnv,
                         simToIkObjectMap[simTarget],
                         targetPose,
@@ -199,9 +232,15 @@ function isConfigCollisionFree(targetAngles)
     end
 
     local originalAngles = getJointPositions(simJoints)
-    setJointPositions(simJoints, targetAngles)
-    local collisionResult = sim.checkCollision(robotCollection, obstacleCollection)
+    local ok, collisionResult = pcall(function()
+        setJointPositions(simJoints, targetAngles)
+        return sim.checkCollision(robotCollection, obstacleCollection)
+    end)
     setJointPositions(simJoints, originalAngles)
+
+    if not ok then
+        return false, 'collision check failed: ' .. tostring(collisionResult)
+    end
 
     if collisionResult ~= 0 then
         return false, 'candidate configuration is in collision'
