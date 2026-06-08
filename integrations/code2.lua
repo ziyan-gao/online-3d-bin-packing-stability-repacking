@@ -104,6 +104,8 @@ function sysCall_init()
     cartesianPlanner = {}
     cartesianPlanner.stepSize = 0.05 -- meters between interpolated Cartesian waypoints
     cartesianPlanner.minSteps = 2
+    cartesianPlanner.maxSteps = 200
+    cartesianPlanner.jointSegmentStep = math.rad(5)
     cartesianPlanner.robotRootAlias = '/mobile_arm'
     cartesianPlanner.obstacleRootAliases = {'/ZeroPressureBelt', '/Pallet'}
     cartesianPlanner.cuboidAliasPrefix = '/Cuboid'
@@ -157,6 +159,10 @@ function interpolateTaskPose4d(startTaskPose, targetTaskPose, fixedRoll, fixedPi
         pitch = fixedPitch,
         yaw = interpolateAngle(startTaskPose.yaw, targetTaskPose.yaw, t),
     }
+end
+
+function isPositiveFiniteNumber(value)
+    return type(value) == 'number' and value > 0 and value == value and value < math.huge
 end
 
 function getJointPositions(joints)
@@ -232,6 +238,43 @@ function isConfigCollisionFree(targetAngles)
     return true, nil
 end
 
+function interpolateJointConfig(startAngles, targetAngles, t)
+    local result = {}
+    for i = 1, #startAngles, 1 do
+        result[i] = startAngles[i] + (targetAngles[i] - startAngles[i]) * t
+    end
+    return result
+end
+
+function computeJointSegmentSampleCount(startAngles, targetAngles)
+    local maxDelta = 0
+    for i = 1, #startAngles, 1 do
+        local delta = math.abs(targetAngles[i] - startAngles[i])
+        if delta > maxDelta then
+            maxDelta = delta
+        end
+    end
+    local sampleStep = cartesianPlanner.jointSegmentStep or math.rad(5)
+    local samples = math.ceil(maxDelta / sampleStep)
+    if samples < 1 then
+        samples = 1
+    end
+    return samples
+end
+
+function validateJointSegmentCollisionFree(startAngles, targetAngles)
+    local samples = computeJointSegmentSampleCount(startAngles, targetAngles)
+    for sampleIndex = 1, samples, 1 do
+        local t = sampleIndex / samples
+        local sampleAngles = interpolateJointConfig(startAngles, targetAngles, t)
+        local ok, err = isConfigCollisionFree(sampleAngles)
+        if not ok then
+            return false, 'joint segment sample ' .. sampleIndex .. ': ' .. err
+        end
+    end
+    return true, nil
+end
+
 function computeWaypointStepCount(startTaskPose, targetTaskPose)
     local dx = targetTaskPose.x - startTaskPose.x
     local dy = targetTaskPose.y - startTaskPose.y
@@ -256,10 +299,10 @@ function generateCartesianWaypoints()
         return ok, waypoints, configs, errorMessage
     end
 
-    if type(cartesianPlanner.stepSize) ~= 'number' or cartesianPlanner.stepSize <= 0 or
-       cartesianPlanner.stepSize ~= cartesianPlanner.stepSize or
-       type(cartesianPlanner.minSteps) ~= 'number' or cartesianPlanner.minSteps <= 0 or
-       cartesianPlanner.minSteps ~= cartesianPlanner.minSteps then
+    if not isPositiveFiniteNumber(cartesianPlanner.stepSize) or
+       not isPositiveFiniteNumber(cartesianPlanner.minSteps) or
+       not isPositiveFiniteNumber(cartesianPlanner.maxSteps) or
+       not isPositiveFiniteNumber(cartesianPlanner.jointSegmentStep) then
         return finish(false, nil, nil, 'invalid Cartesian planner step configuration')
     end
 
@@ -270,9 +313,16 @@ function generateCartesianWaypoints()
     local fixedRoll = startTaskPose.roll
     local fixedPitch = startTaskPose.pitch
     local steps = computeWaypointStepCount(startTaskPose, targetTaskPose)
+    if steps > cartesianPlanner.maxSteps then
+        return finish(false, nil, nil, 'Cartesian waypoint count exceeds limit')
+    end
 
     local waypoints = {}
     local configs = {}
+    local previousAngles = {}
+    for i = 1, #originalAngles, 1 do
+        previousAngles[i] = originalAngles[i]
+    end
 
     for i = 1, steps, 1 do
         local t = i / steps
@@ -283,14 +333,15 @@ function generateCartesianWaypoints()
             return finish(false, nil, nil, 'waypoint ' .. i .. ': ' .. ikError)
         end
 
-        local collisionOk, collisionError = isConfigCollisionFree(targetAngles)
-        if not collisionOk then
-            return finish(false, nil, nil, 'waypoint ' .. i .. ': ' .. collisionError)
+        local segmentOk, segmentError = validateJointSegmentCollisionFree(previousAngles, targetAngles)
+        if not segmentOk then
+            return finish(false, nil, nil, 'waypoint ' .. i .. ': ' .. segmentError)
         end
 
         waypoints[i] = taskPose
         configs[i] = targetAngles
         setJointPositions(simJoints, targetAngles)
+        previousAngles = targetAngles
     end
 
     return finish(true, waypoints, configs, nil)
