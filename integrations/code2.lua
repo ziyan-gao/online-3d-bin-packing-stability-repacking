@@ -1,0 +1,196 @@
+--[[ Control the arm tip motion as follows
+
+sim.setStringSignal('armCommand', sim.packTable({
+    move = true,
+    linear = true,
+}))
+
+--]]
+
+sim=require'sim'
+simIK=require'simIK'
+
+function getObjectIfExists(alias)
+    local handle = sim.getObject(alias, {noError = true})
+    if handle and handle >= 0 then
+        return handle
+    end
+    return nil
+end
+
+function createCollisionCollections()
+    local robotRoot = getObjectIfExists(cartesianPlanner.robotRootAlias)
+    if not robotRoot then
+        return false, 'missing robot root: ' .. cartesianPlanner.robotRootAlias
+    end
+
+    robotCollection = sim.createCollection()
+    sim.addItemToCollection(robotCollection, sim.handle_tree, robotRoot, 0)
+
+    obstacleCollection = sim.createCollection()
+
+    local obstacleCount = 0
+    for i = 1, #cartesianPlanner.obstacleRootAliases, 1 do
+        local obstacleRoot = getObjectIfExists(cartesianPlanner.obstacleRootAliases[i])
+        if obstacleRoot then
+            sim.addItemToCollection(obstacleCollection, sim.handle_tree, obstacleRoot, 0)
+            obstacleCount = obstacleCount + 1
+        end
+    end
+
+    local cuboidIndex = 0
+    while true do
+        local cuboid = sim.getObject(cartesianPlanner.cuboidAliasPrefix .. '*', {index = cuboidIndex, noError = true})
+        if not cuboid or cuboid < 0 then
+            break
+        end
+        sim.addItemToCollection(obstacleCollection, sim.handle_single, cuboid, 0)
+        obstacleCount = obstacleCount + 1
+        cuboidIndex = cuboidIndex + 1
+    end
+
+    if obstacleCount == 0 then
+        return false, 'no obstacles found for collision checking'
+    end
+
+    return true, nil
+end
+
+function sysCall_init()
+    sim.setStepping(true)
+    sim.clearStringSignal('armCommand')
+
+    -- Take a few handles from the scene:
+    simBase=sim.getObject('..')
+    simTip=sim.getObject(':/ikTip')
+    simTarget=sim.getObject('../ikTarget')
+    simJoints = sim.getObjectsInTree(simBase, sim.sceneobject_joint)
+    arm_target_handle = sim.getObject('/arm_target')
+    ikEnv=simIK.createEnvironment()
+    ikGroup_damped=simIK.createGroup(ikEnv)
+    simIK.setGroupCalculation(ikEnv,ikGroup_damped,simIK.method_undamped_pseudo_inverse,0.01,99)
+-----------------------------------------------------------------------------
+--Add ik element from the scene. Check the api: simIK.addElementFromScene
+--ADD your code here
+-----------------------------------------------------------------------------
+    --ikConstraint = simIK.constraint_position + simIK.constraint_alpha_beta
+    ikElement, simToIkObjectMap, ikToSimObjectMap = simIK.addElementFromScene(ikEnv,ikGroup_damped,simBase,simTip,simTarget,simIK.constraint_pose)
+    --ikElement, simToIkObjectMap, ikToSimObjectMap = simIK.addElementFromScene(ikEnv,ikGroup_damped,simBase,simTip,simTarget,ikConstraint)
+    ikJoints = simIK.getGroupJoints(ikEnv, ikGroup_damped)
+
+    -- Execute the movement here:
+    ik_data={}
+    ik_data.ikEnv=ikEnv
+    ik_data.ikGroup=ikGroup_damped
+    ik_data.tip=simTip
+    ik_data.target=simTarget
+    ik_data.base = simBase
+    ik_data.joints=simJoints
+    
+    maxVel={math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3}
+    maxAccel={math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3}
+    maxJerk= {math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3,math.pi/3}
+    maxIkVel={0.5,0.5,0.5,0.5} -- vx,vy,vz in m/s, Vtheta is rad/s
+    maxIkAccel={5,5,5,1} -- ax,ay,az in m/s^2, Atheta is rad/s^2
+    maxIkJerk={5,5,5,1} -- is ignored (i.e. infinite) with RML type 2
+    cartesianPlanner = {}
+    cartesianPlanner.stepSize = 0.05 -- meters between interpolated Cartesian waypoints
+    cartesianPlanner.minSteps = 2
+    cartesianPlanner.robotRootAlias = '/mobile_arm'
+    cartesianPlanner.obstacleRootAliases = {'/ZeroPressureBelt', '/Pallet'}
+    cartesianPlanner.cuboidAliasPrefix = '/Cuboid'
+
+    local collectionsOk, collectionsError = createCollisionCollections()
+    if not collectionsOk then
+        sim.addLog(sim.verbosity_warnings, 'Cartesian planner collision setup failed: ' .. collectionsError)
+    end
+
+end
+
+
+function moveToPose(targetPose)
+-----------------------------------------------------------------------------
+--SP I:Using a threaded script to move the robot end-effector 
+--through three target poses based on the simIK plugin and sim.moveToConfig(). 
+-----------------------------------------------------------------------------
+--1. Call simIK.setObjectPose() to specify the target pose in ik world
+--2. Call simIK.handleGroup() to solve ik
+    simIK.setObjectPose(ikEnv, 
+                        simToIkObjectMap[simTarget], 
+                        targetPose, 
+                        simToIkObjectMap[simBase])
+    simIK.handleGroup(ikEnv, ikGroup_damped)
+    targetAngles = {}
+    for i=1, #simJoints, 1 do
+        tmp = simJoints[i]
+        targetAngle = simIK.getJointPosition(ikEnv, simToIkObjectMap[tmp])
+        table.insert(targetAngles, targetAngle)
+    end
+    local params = {
+        joints = simJoints,
+        targetPos = targetAngles,
+        maxVel = maxVel,
+        maxAccel = maxAccel,
+        maxJerk = maxJerk,
+    }
+    sim.moveToConfig(params)
+end
+
+function moveTo(mode)
+    pose = sim.getObjectPose(arm_target_handle, ik_data.base)
+    if mode == 'linear' then
+        return moveToPose_viaIK(pose)
+    else
+        return moveToPose(pose)
+    end
+end
+
+
+function moveToPoseCallback(data)
+    --easier way
+    
+    sim.setObjectPose(data.auxData.target, data.pose, data.auxData.base)
+    simIK.handleGroup(data.auxData.ikEnv, data.auxData.ikGroup, {syncWorlds = true, callback = jacobianCallback})
+
+end
+
+function moveToPose_viaIK(targetPose)
+    local params = {
+        pose = sim.getObjectPose(ik_data.tip, ik_data.base),--current pose
+        targetPose = targetPose,
+        maxVel = maxIkVel,
+        maxAccel = maxIkAccel,
+        maxJerk = maxIkJerk,
+        callback = moveToPoseCallback,
+        auxData = ik_data
+    }
+    sim.moveToPose(params)
+end
+
+
+function sysCall_thread()
+    while sim.getSimulationState() ~= sim.simulation_advancing_abouttostop do
+        --currentTargetPose = sim.getObjectPose(wp1, simBase)
+        local packed = sim.getStringSignal('armCommand')
+        if packed then
+            sim.clearStringSignal('armCommand')
+
+            local ok, cmd = pcall(sim.unpackTable, packed)
+
+            if ok and cmd ~= nil and cmd.move then
+                if cmd.linear then
+                    moveTo('linear')
+                else
+                    moveTo('config')
+                end
+            end
+        else
+            sim.step()
+        end
+    end
+end
+
+function sysCall_cleanup()
+    sim.clearStringSignal('armCommand')
+    simIK.eraseEnvironment(ikEnv)
+end
