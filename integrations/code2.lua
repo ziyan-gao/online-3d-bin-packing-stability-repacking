@@ -19,21 +19,25 @@ function getObjectIfExists(alias)
 end
 
 function createCollisionCollections()
+    cartesianPlanner.collisionCollectionsReady = false
+    robotCollection = nil
+    obstacleCollection = nil
+
     local robotRoot = getObjectIfExists(cartesianPlanner.robotRootAlias)
     if not robotRoot then
         return false, 'missing robot root: ' .. cartesianPlanner.robotRootAlias
     end
 
-    robotCollection = sim.createCollection()
-    sim.addItemToCollection(robotCollection, sim.handle_tree, robotRoot, 0)
+    local newRobotCollection = sim.createCollection()
+    sim.addItemToCollection(newRobotCollection, sim.handle_tree, robotRoot, 0)
 
-    obstacleCollection = sim.createCollection()
+    local newObstacleCollection = sim.createCollection()
 
     local obstacleCount = 0
     for i = 1, #cartesianPlanner.obstacleRootAliases, 1 do
         local obstacleRoot = getObjectIfExists(cartesianPlanner.obstacleRootAliases[i])
         if obstacleRoot then
-            sim.addItemToCollection(obstacleCollection, sim.handle_tree, obstacleRoot, 0)
+            sim.addItemToCollection(newObstacleCollection, sim.handle_tree, obstacleRoot, 0)
             obstacleCount = obstacleCount + 1
         end
     end
@@ -44,7 +48,7 @@ function createCollisionCollections()
         if not cuboid or cuboid < 0 then
             break
         end
-        sim.addItemToCollection(obstacleCollection, sim.handle_single, cuboid, 0)
+        sim.addItemToCollection(newObstacleCollection, sim.handle_single, cuboid, 0)
         obstacleCount = obstacleCount + 1
         cuboidIndex = cuboidIndex + 1
     end
@@ -52,6 +56,10 @@ function createCollisionCollections()
     if obstacleCount == 0 then
         return false, 'no obstacles found for collision checking'
     end
+
+    robotCollection = newRobotCollection
+    obstacleCollection = newObstacleCollection
+    cartesianPlanner.collisionCollectionsReady = true
 
     return true, nil
 end
@@ -99,6 +107,7 @@ function sysCall_init()
     cartesianPlanner.robotRootAlias = '/mobile_arm'
     cartesianPlanner.obstacleRootAliases = {'/ZeroPressureBelt', '/Pallet'}
     cartesianPlanner.cuboidAliasPrefix = '/Cuboid'
+    cartesianPlanner.collisionCollectionsReady = false
 
     local collectionsOk, collectionsError = createCollisionCollections()
     if not collectionsOk then
