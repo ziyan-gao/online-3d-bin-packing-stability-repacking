@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="880" viewBox="0 0 1360 880">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #1f2933; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #52606d; }
+      .section { font-size: 20px; font-weight: 700; }
+      .label { font-size: 15px; font-weight: 700; }
+      .small { font-size: 13px; fill: #52606d; }
+      .tiny { font-size: 12px; fill: #52606d; }
+      .box { stroke: #334e68; stroke-width: 1.5; rx: 8; ry: 8; }
+      .env { fill: #e0f2fe; }
+      .actor { fill: #e9f8ef; }
+      .critic { fill: #fff3d6; }
+      .dist { fill: #f3e8ff; }
+      .mask { fill: #fce7f3; }
+      .neutral { fill: #f5f7fa; }
+      .line { stroke: #333; stroke-width: 1.6; marker-end: url(#arrow); fill: none; }
+      .dash { stroke: #6b7280; stroke-width: 1.4; stroke-dasharray: 6 5; marker-end: url(#arrow); fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1360" height="880" fill="#ffffff"/>
+  <text x="40" y="46" class="title">Cascaded Block Selector Network</text>
+  <text x="40" y="72" class="subtitle">Code path: packing.policy_loader.build_net(policy_mode="cascaded_block_selector") -> CascadedActor + CascadedCritic</text>
+
+  <rect x="40" y="105" width="290" height="190" class="box env"/>
+  <text x="62" y="135" class="section">Environment Observation</text>
+  <text x="62" y="166" class="label">oriented_blocks</text>
+  <text x="195" y="166" class="small">[B, 24, 8]</text>
+  <text x="62" y="193" class="label">ems</text>
+  <text x="195" y="193" class="small">[B, 80, 6]</text>
+  <text x="62" y="220" class="label">block_mask</text>
+  <text x="195" y="220" class="small">[B, 24]</text>
+  <text x="62" y="247" class="label">loading_mask</text>
+  <text x="195" y="247" class="small">[B, 24, 80]</text>
+  <text x="62" y="277" class="tiny">Layered approach clips/filter EMS before this observation.</text>
+
+  <rect x="395" y="95" width="845" height="380" class="box actor"/>
+  <text x="420" y="128" class="section">Actor: CascadedActor, 84,610 params</text>
+
+  <rect x="425" y="165" width="210" height="85" class="box neutral"/>
+  <text x="445" y="193" class="label">Block Encoder</text>
+  <text x="445" y="218" class="small">Linear(8 -> 128)</text>
+  <text x="445" y="238" class="small">LeakyReLU, Linear(128 -> 128)</text>
+
+  <rect x="425" y="305" width="210" height="85" class="box neutral"/>
+  <text x="445" y="333" class="label">EMS Encoder</text>
+  <text x="445" y="358" class="small">Linear(6 -> 128)</text>
+  <text x="445" y="378" class="small">LeakyReLU, Linear(128 -> 128)</text>
+
+  <rect x="700" y="150" width="190" height="75" class="box neutral"/>
+  <text x="720" y="180" class="label">Block Head</text>
+  <text x="720" y="205" class="small">Linear(128 -> 1)</text>
+  <text x="720" y="224" class="tiny">block_logits [B, 24]</text>
+
+  <rect x="700" y="250" width="210" height="90" class="box neutral"/>
+  <text x="720" y="280" class="label">Masked Block Pool</text>
+  <text x="720" y="305" class="small">mean(block_embed where block_mask)</text>
+  <text x="720" y="326" class="tiny">block_context [B, 24, 128]</text>
+
+  <rect x="965" y="205" width="235" height="130" class="box neutral"/>
+  <text x="985" y="235" class="label">Pair Features</text>
+  <text x="985" y="260" class="small">concat(block_embed,</text>
+  <text x="985" y="280" class="small">       ems_embed,</text>
+  <text x="985" y="300" class="small">       block_context)</text>
+  <text x="985" y="322" class="tiny">[B, 24, 80, 384]</text>
+
+  <rect x="965" y="370" width="235" height="80" class="box neutral"/>
+  <text x="985" y="400" class="label">Loading Head</text>
+  <text x="985" y="425" class="small">Linear(384 -> 128 -> 1)</text>
+  <text x="985" y="444" class="tiny">ems_logits [B, 24, 80]</text>
+
+  <rect x="1040" y="510" width="250" height="105" class="box dist"/>
+  <text x="1060" y="540" class="label">Joint Action Logits</text>
+  <text x="1060" y="565" class="small">block_logits[:, :, None]</text>
+  <text x="1060" y="586" class="small">+ ems_logits</text>
+  <text x="1060" y="607" class="tiny">flattened logits [B, 24 * 80]</text>
+
+  <rect x="1040" y="650" width="250" height="115" class="box dist"/>
+  <text x="1060" y="680" class="label">CascadedCategoricalMasked</text>
+  <text x="1060" y="705" class="small">mask invalid block/EMS pairs</text>
+  <text x="1060" y="726" class="small">softmax over valid flat actions</text>
+  <text x="1060" y="747" class="tiny">action = block_index * 80 + ems_index</text>
+
+  <rect x="40" y="535" width="845" height="240" class="box critic"/>
+  <text x="65" y="568" class="section">Critic: CascadedCritic, 68,097 params</text>
+
+  <rect x="75" y="605" width="210" height="80" class="box neutral"/>
+  <text x="95" y="635" class="label">Block Encoder</text>
+  <text x="95" y="660" class="small">same MLP shape as actor</text>
+  <text x="95" y="680" class="tiny">block_embed [B, 24, 128]</text>
+
+  <rect x="330" y="605" width="210" height="80" class="box neutral"/>
+  <text x="350" y="635" class="label">EMS Encoder</text>
+  <text x="350" y="660" class="small">same MLP shape as actor</text>
+  <text x="350" y="680" class="tiny">ems_embed [B, 80, 128]</text>
+
+  <rect x="585" y="605" width="250" height="105" class="box neutral"/>
+  <text x="605" y="635" class="label">Masked Mean Pooling</text>
+  <text x="605" y="660" class="small">block_pool via block_mask</text>
+  <text x="605" y="681" class="small">ems_pool via loading_mask.any(block)</text>
+  <text x="605" y="702" class="tiny">concat -> [B, 256]</text>
+
+  <rect x="585" y="735" width="250" height="70" class="box neutral"/>
+  <text x="605" y="765" class="label">Value Head</text>
+  <text x="605" y="790" class="small">Linear(256 -> 128 -> 1)</text>
+
+  <rect x="395" y="805" width="465" height="48" class="box mask"/>
+  <text x="415" y="835" class="label">Important: no transformer/attention is used in cascaded policy.</text>
+
+  <path class="line" d="M330 165 C365 165, 385 178, 425 188"/>
+  <path class="line" d="M330 193 C365 193, 385 318, 425 333"/>
+  <path class="line" d="M635 205 C660 205, 675 188, 700 188"/>
+  <path class="line" d="M635 205 C660 205, 675 280, 700 292"/>
+  <path class="line" d="M635 345 C785 345, 840 270, 965 270"/>
+  <path class="line" d="M890 187 C920 190, 935 215, 965 240"/>
+  <path class="line" d="M910 295 C935 295, 945 295, 965 295"/>
+  <path class="line" d="M1083 335 C1083 350, 1083 358, 1083 370"/>
+  <path class="line" d="M1200 410 C1248 430, 1260 470, 1208 510"/>
+  <path class="line" d="M890 188 C985 265, 1025 415, 1110 510"/>
+  <path class="dash" d="M330 220 C700 500, 875 610, 1040 690"/>
+  <path class="line" d="M1165 615 C1165 628, 1165 638, 1165 650"/>
+
+  <path class="line" d="M330 165 C315 360, 250 500, 180 605"/>
+  <path class="line" d="M330 193 C385 370, 410 500, 435 605"/>
+  <path class="line" d="M285 645 C400 645, 470 645, 585 650"/>
+  <path class="line" d="M540 645 C560 645, 570 645, 585 650"/>
+  <path class="line" d="M710 710 C710 722, 710 728, 710 735"/>
+
+  <text x="810" y="500" class="tiny">action_mask = loading_mask &amp; block_mask[:, :, None]</text>
+  <text x="65" y="840" class="tiny">Shapes shown for current config: max_oriented_blocks = 2 * buffer_capacity = 24, k_placement = 80, embed_size = 128.</text>
+</svg>

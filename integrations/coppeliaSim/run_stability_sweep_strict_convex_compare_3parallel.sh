@@ -8,6 +8,7 @@ PYTHON_BIN="${PYTHON_BIN:-/home/gao/anaconda3/envs/packing-toolkit/bin/python}"
 COPPELIASIM_DIR="${COPPELIASIM_DIR:-/home/gao/CoppeliaSim_Edu_V4_10_0_rev0_Ubuntu22_04}"
 COPPELIASIM_SETTINGS_SOURCE="${COPPELIASIM_SETTINGS_SOURCE:-${HOME}/.CoppeliaSim}"
 COPPELIASIM_ISOLATED_SETTINGS="${COPPELIASIM_ISOLATED_SETTINGS:-0}"
+COPPELIASIM_TRUE_HEADLESS="${COPPELIASIM_TRUE_HEADLESS:-1}"
 RUN_ID="$(date +%Y%m%d_%H%M%S)"
 ARTIFACT_DIR="${SCRIPT_DIR}/experiment_results_strict_convex_compare_${RUN_ID}"
 RESULT_DIR="${ARTIFACT_DIR}/results"
@@ -106,13 +107,17 @@ start_coppeliasim() {
 
   (
     cd "$COPPELIASIM_DIR"
+    local headless_args=()
+    if [[ "$COPPELIASIM_TRUE_HEADLESS" == "1" ]]; then
+      headless_args=(-H)
+    fi
     if [[ -n "$settings_suffix" ]]; then
       export COPPELIASIM_USER_SETTINGS_FOLDER_SUFFIX="$settings_suffix"
     fi
     export QT_PLUGIN_PATH="$COPPELIASIM_DIR"
     export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_DIR}/platforms"
     unset QT_QPA_FONTDIR || true
-    ./coppeliaSim.sh -GzmqRemoteApi.rpcPort="${port}"
+    ./coppeliaSim.sh "${headless_args[@]}" -GzmqRemoteApi.rpcPort="${port}"
   ) > "$log_file" 2>&1 &
 
   local pid=$!
