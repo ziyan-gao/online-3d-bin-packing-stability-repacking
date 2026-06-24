@@ -1,12 +1,6 @@
 function sysCall_init()
     sim = require('sim')
-    json = require('dkjson')
-    uiEnabled = false
-    local ok, module = pcall(require, 'simUI')
-    if ok then
-        simUI = module
-        uiEnabled = true
-    end
+    simUI = require('simUI')
 
     initConfig()
     initHandles()
@@ -17,7 +11,6 @@ function sysCall_init()
 
     sim.setStepping(true)
     currentTime = sim.getSimulationTime()
-    publishTrackedItemsData()
 end
 
 function initConfig()
@@ -416,7 +409,7 @@ function publishTrackedItemsData()
 
     sim.setStringSignal(
         'trackedItemsData',
-        json.encode({
+        sim.packTable({
             segmentCount = segmentCount,
             capacity = capacity,
             full = full,
@@ -430,11 +423,6 @@ end
 function initItemTrackingUi()
     trackedItems = {}
     trackedItemOrder = {}
-    itemUi = nil
-
-    if not uiEnabled then
-        return
-    end
 
     local xml = [[
     <ui title="Items on Conveyor" closeable="false" resizable="true" activate="false">
@@ -567,34 +555,27 @@ function updateItemTrackingUi()
     end
 end
 
-function stepBelt()
-    syncConfigFromSignals()
-    updateItemTrackingUi()
-    publishTrackedItemsData()
-
-    local now = sim.getSimulationTime()
-
-    if not isRobotPicking() and now - currentTime >= dropInterval then
-        currentTime = now
-        trySpawn()
-    end
-end
-
-function sysCall_actuation()
-    stepBelt()
-end
-
 function sysCall_thread()
     currentTime = sim.getSimulationTime()
 
     while sim.getSimulationState() ~= sim.simulation_advancing_abouttostop do
-        stepBelt()
+        syncConfigFromSignals()
+        updateItemTrackingUi()
+        publishTrackedItemsData()
+
+        local now = sim.getSimulationTime()
+
+        if not isRobotPicking() and now - currentTime >= dropInterval then
+            currentTime = now
+            trySpawn()
+        end
+
         sim.step()
     end
 end
 
 function sysCall_cleanup()
-    if itemUi and uiEnabled then
+    if itemUi then
         simUI.destroy(itemUi)
     end
 end
