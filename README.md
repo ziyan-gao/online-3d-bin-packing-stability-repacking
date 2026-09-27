@@ -12,6 +12,7 @@ accepted.
 ## What This Repository Demonstrates
 
 - Structural stability validation using a height map and feasibility map.
+- Global LP contact-load bounds with interactive force visualization.
 - Actor-critic packing policy over EMS-based placement candidates.
 - MCTS-based safe repacking planning when the incoming item is blocked.
 - Interactive Plotly/Three.js tools for inspecting packing, support regions,
@@ -169,6 +170,54 @@ Run a short training smoke demo:
 ```bash
 python train.py --config configs/train_demo.yaml
 ```
+
+## Global LP Load Analysis
+
+The LP module reuses each placed item's cached load-bearing convex polygon
+(LBCP) to compute feasible vertical contact forces, contact-force bounds, and
+payload bounds. It enforces force and moment balance with nonnegative forces
+using SciPy/HiGHS. The default model assumes rigid, axis-aligned boxes, horizontal
+contacts and a geometric-center COM; it does not model friction or deformation.
+Each reported minimum/maximum is optimized independently, so extrema across
+interfaces are not necessarily simultaneous. LP analysis is opt-in and can be
+run after packing or repacking.
+
+After activating the environment above, run from the repository root:
+
+```bash
+python -m packing.lp_demo --scene bridge --output outputs/plotly_live/lp_demo
+# Optional live viewer at http://127.0.0.1:8766/index.html (Ctrl+C to stop):
+python -m packing.lp_demo --scene stack --live
+```
+
+Open `outputs/plotly_live/lp_demo/index.html` for the offline replay. It includes
+LBCP/contact polygons, ground reactions, and minimum/maximum force arrows with
+hover details and display controls. Use `--force-view lp-solution` to inspect
+vertex forces, or `--force-view resultant-only` for contact resultants. Runtime
+assets are bundled; Node.js and an internet connection are not needed to view it.
+
+Analyze an existing `PackingEnv` populated through `env.pack(...)`:
+
+```python
+from packing.lp_analysis import build_lp_frame
+from packing.threejs_visualization import ThreeReplayRecorder
+
+result, frame = build_lp_frame(env, material_density=1e-6)
+print(result.status, result.item_payload_bounds)
+recorder = ThreeReplayRecorder("outputs/plotly_live/my_lp")
+recorder.capture(frame.title, frame)
+recorder.save()
+```
+
+Coordinates are in **mm**, density in **kg/mm³**, and forces/payload bounds in
+**N** (`--density 1e-6` means 1000 kg/m³). Missing LBCP cache entries raise an
+error; infeasible LP states show their status without force arrows. Re-run the
+analysis after changing the packing state. The solver API is
+`packing_env.lbcp.solve_global_load_bounds`; the environment adapter is
+`packing.lp_analysis.solve_packing_loads`.
+
+To develop the viewer, run `npm ci`, `npm test`, and `npm run build` inside
+`packing/threejs_visualization/frontend`. Python checks: `python -m pytest tests`.
 
 ## Main Components
 

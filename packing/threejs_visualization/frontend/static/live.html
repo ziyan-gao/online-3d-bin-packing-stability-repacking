@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Packing live view</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><h1 id="frame-title">Packing live view</h1><span id="frame-metrics" aria-label="Current packing metrics"></span><span id="live-status">Connecting…</span></header>
+  <main class="workspace">
+    <section class="scene-panel container"><h2>Container <button id="export-container" type="button">导出 Container PNG</button></h2><div class="scene-host" data-scene="container"></div></section>
+    <section class="scene-panel"><h2>Buffer</h2><div class="scene-host" data-scene="buffer"></div></section>
+    <section class="scene-panel"><h2>Holding</h2><div class="scene-host" data-scene="holding"></div></section>
+  </main>
+  <footer class="footer"><div id="legend" aria-label="Legend"></div></footer>
+  <script src="/static/renderer.bundle.js"></script><script>PackingThree.startLive();</script>
+</body>
+</html>

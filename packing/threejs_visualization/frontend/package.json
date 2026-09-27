@@ -1,0 +1,16 @@
+{
+  "name": "packing-threejs-visualization",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "node scripts/vendor-three.mjs",
+    "build": "npm run vendor && node scripts/build.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "three": "0.165.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}
