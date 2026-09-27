@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Packing replay</title><link rel="stylesheet" href="static/style.css"></head>
+<body>
+  <header><h1 id="frame-title">Packing replay</h1><span id="frame-metrics" aria-label="Current packing metrics"></span><span id="replay-position">0 / 0</span></header>
+  <main class="workspace">
+    <section class="scene-panel container"><h2>Container <button id="export-container" type="button">导出 Container PNG</button></h2><div class="scene-host" data-scene="container"></div></section>
+    <section class="scene-panel"><h2>Buffer</h2><div class="scene-host" data-scene="buffer"></div></section>
+    <section class="scene-panel"><h2>Holding</h2><div class="scene-host" data-scene="holding"></div></section>
+  </main>
+  <footer class="footer"><div id="legend" aria-label="Legend"></div><div class="replay-controls"><button id="replay-prev">Previous</button><button id="replay-play">Play</button><button id="replay-next">Next</button><input id="replay-slider" type="range" min="0" max="0" value="0" aria-label="Replay frame"></div></footer>
+  <script src="frames.js"></script><script src="static/renderer.bundle.js"></script><script>PackingThree.startReplay(window.PACKING_THREE_REPLAY || globalThis.PACKING_FRAMES || (typeof frames !== "undefined" ? frames : []));</script>
+</body>
+</html>

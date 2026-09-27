@@ -21,6 +21,13 @@ class Heu_Stable(Map):
         """Read-only view for visualization consumers."""
         return list(self._convex_hull_vis_cache)
 
+    def lbcp_polygon_map(self) -> dict[tuple, Polygon]:
+        """Return cached load-bearing top polygons in world coordinates (mm)."""
+        return {
+            item.to_key(): Polygon(vis_data.support_polygon_xy)
+            for item, _dims, vis_data in self._convex_hull_vis_cache
+        }
+
     def get_com_bound(self, o3d: Orthogonal3D, scale: float = 0.1) -> Polygon:
         """
         Get center-of-mass boundary polygon.
