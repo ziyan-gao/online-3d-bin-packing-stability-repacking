@@ -23,3 +23,9 @@
 - Chrome headless rendered the offline replay using bundled assets; live HTTP smoke verified HTML, LP frame, resultant-only arrows and renderer bundle.
 - Independent review identified that feasible witnesses overrode bound views. Fixed with regression coverage for all three views, force magnitudes, moment-equivalent resultants and legends; follow-up review found no further important issues.
 - `git diff --check` and Python compilation passed. Existing configuration/CoppeliaSim edits preserved.
+
+## Main integration validation
+
+The LP change was cherry-picked onto main (base 859b8e8) without the unrelated blockwise training commits. Main's Item lacks round_buffered_dim, so buffer previews now obtain dimensions through Item.Virtual_Dim. Frontend pretest generates ignored vendor assets, supporting npm ci followed directly by npm test in a fresh checkout.
+
+Main validation: 87 Python tests and 23 frontend tests passed; frontend build succeeded; bridge and stack CLI demos returned optimal and exported offline replays. Independent review found no important remaining issues. Earlier 173-test results above refer to the blockwise branch and include its separate training tests.

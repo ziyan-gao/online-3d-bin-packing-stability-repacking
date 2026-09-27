@@ -516,14 +516,12 @@ class ThreeVisualizationBuilder:
             return self._dims(box)
         if hasattr(box, "Virtual_Dim"):
             return self._dims(box.Virtual_Dim)
+        from packing_env.data_type.geometry import Point3D
         from packing_env.data_type.item import Item
 
-        dx, dy, dz = self._dims(box)
-        return (
-            Item.round_buffered_dim(dx, clearance, box.resolution),
-            Item.round_buffered_dim(dy, clearance, box.resolution),
-            dz,
-        )
+        # Use the target repository's own clearance rules for unplaced boxes.
+        preview = Item(FLB=Point3D(), Dim=box, buffer_space=clearance)
+        return self._dims(preview.Virtual_Dim)
 
     def _item_geometry(self, item: Item, *, inflate: float = 0.0, virtual_boxes: bool = False) -> dict[str, list[float]]:
         point = item.FLB if virtual_boxes else item.True_FLB

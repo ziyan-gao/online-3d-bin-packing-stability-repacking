@@ -127,3 +127,15 @@ def test_force_views_render_bound_witnesses_with_correct_resultant_moments(view)
         for axis in (0, 1):
             moment = sum(xy[axis] * f for xy, f in zip(interface.polygon_xy, forces))
             assert arrow.geometry['physical_origin'][axis] * sum(forces) == pytest.approx(moment)
+
+
+@pytest.mark.parametrize('clearance', [0, 20])
+def test_buffer_virtual_dimensions_match_placed_item_dimensions(clearance):
+    from packing.threejs_visualization import ThreeVisualizationBuilder
+    from packing_env.visualization.config import VisualConfig
+    builder = ThreeVisualizationBuilder(VisualConfig())
+    dimensions = Orthogonal3D(100, 80, 50)
+    placed = Item(FLB=Point3D(0, 0, 0), Dim=dimensions, buffer_space=clearance)
+    expected = (100 + clearance, 80 + clearance, 50)
+    assert builder._display_dims(dimensions, virtual_boxes=True, clearance=clearance) == expected
+    assert builder._display_dims(placed, virtual_boxes=True) == expected

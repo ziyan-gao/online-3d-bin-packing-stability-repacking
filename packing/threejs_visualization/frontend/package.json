@@ -5,7 +5,8 @@
   "scripts": {
     "vendor": "node scripts/vendor-three.mjs",
     "build": "npm run vendor && node scripts/build.mjs",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "pretest": "npm run vendor"
   },
   "dependencies": {
     "three": "0.165.0"
