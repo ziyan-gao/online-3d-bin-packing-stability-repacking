@@ -93,13 +93,6 @@ visual artifacts.
 
 [Watch both demonstrations (OneDrive)](https://1drv.ms/v/c/02d31ff9b580407b/IQA61tgk5wh8S4LtudoyUeWyASnP7vSRTMxD0SGNzgauxjw?e=H7tTax)
 
-The video includes both real-platform demonstrations:
-
-- **Random stable loading validation:** three random stable loading sequences
-  used to support the proposed structural stability validation method.
-- **Policy packing with safe repacking:** robot palletizing showing packing,
-  unpacking, and repacking using the trained policy and repacking planner.
-
 ## Installation
 
 Create the recommended conda environment:
