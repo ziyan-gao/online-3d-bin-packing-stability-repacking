@@ -87,8 +87,7 @@ visual artifacts.
   `_plotly_live/notebook_demo/mcts_optimized_replay.html`.
 - Real-platform demonstrations show the stability validation and policy-driven
   repacking behavior on hardware:
-  `figures/random_stable_loading_acc.gif` and
-  `figures/policy_rearrangement_demo.gif`.
+  see [Real-Platform Demonstrations](#real-platform-demonstrations).
 
 ## Real-Platform Demonstrations
 
@@ -101,13 +100,13 @@ proposed structural stability validation method.
 
 **Policy packing with safe repacking**
 
-![Policy packing with safe repacking](figures/policy_rearrangement_demo.gif)
+[Watch the video: Policy packing with safe repacking (OneDrive)](https://1drv.ms/v/c/02d31ff9b580407b/IQA61tgk5wh8S4LtudoyUeWyASnP7vSRTMxD0SGNzgauxjw?e=H7tTax)
 
 Robot palletizing procedure showing packing, unpacking, and repacking on the
 pallet using the trained policy and repacking planner.
 
-The GIFs are stored in `figures/` so the demonstrations render directly in the
-README.
+The random stable loading GIF is stored in `figures/` and renders directly in
+the README. The policy packing video is available through the OneDrive link above.
 
 ## Installation
 
