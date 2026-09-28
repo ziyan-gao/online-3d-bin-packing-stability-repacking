@@ -91,22 +91,14 @@ visual artifacts.
 
 ## Real-Platform Demonstrations
 
-**Random stable loading validation**
+[Watch both demonstrations (OneDrive)](https://1drv.ms/v/c/02d31ff9b580407b/IQA61tgk5wh8S4LtudoyUeWyASnP7vSRTMxD0SGNzgauxjw?e=H7tTax)
 
-![Random stable loading validation](figures/random_stable_loading_acc.gif)
+The video includes both real-platform demonstrations:
 
-Three random stable loading sequences on the real platform, used to support the
-proposed structural stability validation method.
-
-**Policy packing with safe repacking**
-
-[Watch the video: Policy packing with safe repacking (OneDrive)](https://1drv.ms/v/c/02d31ff9b580407b/IQA61tgk5wh8S4LtudoyUeWyASnP7vSRTMxD0SGNzgauxjw?e=H7tTax)
-
-Robot palletizing procedure showing packing, unpacking, and repacking on the
-pallet using the trained policy and repacking planner.
-
-The random stable loading GIF is stored in `figures/` and renders directly in
-the README. The policy packing video is available through the OneDrive link above.
+- **Random stable loading validation:** three random stable loading sequences
+  used to support the proposed structural stability validation method.
+- **Policy packing with safe repacking:** robot palletizing showing packing,
+  unpacking, and repacking using the trained policy and repacking planner.
 
 ## Installation
 
